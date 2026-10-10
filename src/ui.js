@@ -1,0 +1,35 @@
+export function appPage(){return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FlowNexa • Painel</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;color:#17233a;background:#f5f7fa}*{box-sizing:border-box}body{margin:0}header{background:#0c1b35;color:white;padding:20px 5vw;display:flex;justify-content:space-between;align-items:center}main{max-width:1200px;margin:30px auto;padding:0 20px}.card{background:#fff;border:1px solid #dee4ec;border-radius:16px;padding:24px;box-shadow:0 4px 15px #0c193b08}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:22px}h1{font-size:32px}h2{font-size:21px;margin-top:0}label{display:block;font-size:13px;margin:10px 0 5px}input,select{display:block;width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}button{padding:11px 16px;border:0;border-radius:9px;background:#1f3f78;color:#fff;font:inherit;cursor:pointer}button.secondary{background:#ebeff6;color:#17233a}button:disabled{opacity:.55;cursor:not-allowed}.muted{color:#64748b}.notice{padding:12px;border-radius:10px;background:#fff8e5;color:#7a4b00;margin-bottom:20px}small{color:#64748b}section{margin:20px 0}.hidden{display:none}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}#message{min-height:28px;color:#9b3124}.code{font:12px ui-monospace,monospace;background:#f0f3f7;border-radius:8px;padding:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+</style></head><body>
+<header><strong>✦ FlowNexa</strong><span>Automação inteligente • Ambiente protegido</span></header>
+<main><h1>Seu painel de automações</h1><p class="muted">Contas e fluxos separados por espaço de trabalho. Toda automação permanece desligada até a validação de produção.</p>
+<div class="notice">Pré-produção: o sistema ainda não envia mensagens para Instagram e não está liberado para clientes.</div><p id="message" role="status"></p>
+<section id="access" class="grid"><div class="card"><h2>Entrar</h2><form id="login"><label>E-mail</label><input name="email" type="email" required autocomplete="email"><label>Senha</label><input name="password" type="password" required autocomplete="current-password"><p><button>Entrar</button></p></form></div>
+<div class="card"><h2>Criar espaço de trabalho</h2><form id="register"><label>E-mail</label><input name="email" type="email" required autocomplete="email"><label>Senha (mínimo 12 caracteres)</label><input name="password" type="password" minlength="12" required autocomplete="new-password"><p><button>Cadastrar</button></p></form></div></section>
+<section id="dashboard" class="hidden"><div class="row"><strong id="current"></strong><button class="secondary" id="logout">Sair</button></div><div class="grid">
+<div class="card"><h2>Instagram</h2><p id="accounts">Carregando contas…</p><button id="connect">Conectar Instagram oficialmente</button><p><small>Login direto na Meta. Nenhuma senha de Instagram é armazenada.</small></p></div>
+<div class="card"><h2>Automações</h2><p id="flows">Carregando fluxos…</p><p><small>Somente rascunhos. Ativação bloqueada.</small></p></div></div>
+<div class="card"><h2>Templates e pré-visualização</h2><p class="muted">Escolha um exemplo. A criação final depende da conta conectada.</p><select id="templates"></select><pre class="code" id="preview"></pre></div></section></main>
+<script>
+const $=id=>document.getElementById(id);
+let workspace=null;
+const api=async(path,options={})=>{const r=await fetch(path,{credentials:'same-origin',...options});const x=await r.json();if(!r.ok)throw Error(x.error||'request_failed');return x};
+function notice(msg){$('message').textContent=msg}
+async function init(){
+let u;try{u=await api('/api/auth/me')}catch{$('access').classList.remove('hidden');$('dashboard').classList.add('hidden');return}
+$('access').classList.add('hidden');$('dashboard').classList.remove('hidden');$('current').textContent=u.user.email;
+const w=await api('/api/workspaces');workspace=w.workspaces[0]?.id;if(!workspace)return notice('Espaço não encontrado');
+const [a,f,t]=await Promise.all([api('/api/accounts?workspace='+encodeURIComponent(workspace)),api('/api/flows?workspace='+encodeURIComponent(workspace)),api('/api/templates')]);
+$('accounts').textContent=a.accounts.length?a.accounts.map(x=>'@'+x.username+' ('+x.status+')').join(' • '):'Nenhuma conta conectada';
+$('flows').textContent=f.flows.length?f.flows.map(x=>x.name).join(' • '):'Nenhum fluxo criado';
+$('templates').replaceChildren();for(const entry of t.templates){const option=document.createElement('option');option.value=entry.id;option.textContent=entry.name;$('templates').append(option)}
+function show(){const tpl=t.templates.find(v=>v.id===$('templates').value);$('preview').textContent=JSON.stringify(tpl,null,2)}$('templates').addEventListener('change',show);show();
+}
+for(const id of ['login','register'])$(id).addEventListener('submit',async event=>{event.preventDefault();const fields=Object.fromEntries(new FormData(event.currentTarget));try{await api('/api/auth/'+id,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(fields)});notice('');await init()}catch(e){notice('Não foi possível autenticar: '+e.message)}});
+$('logout').addEventListener('click',async()=>{await api('/api/auth/logout',{method:'POST'});location.reload()});
+$('connect').addEventListener('click',async()=>{try{const result=await api('/api/instagram/connect?workspace='+encodeURIComponent(workspace));location.assign(result.authorization_url)}catch(e){notice('Conexão indisponível: '+e.message)}});
+init().catch(e=>notice(e.message));
+</script></body></html>`}
