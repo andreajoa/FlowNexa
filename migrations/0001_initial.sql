@@ -1,0 +1,13 @@
+PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS sessions (id_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, owner_id TEXT NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS memberships (workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK(role IN ('owner','admin','editor','viewer')), PRIMARY KEY(workspace_id,user_id));
+CREATE TABLE IF NOT EXISTS instagram_accounts (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, username TEXT NOT NULL, ig_user_id TEXT NOT NULL UNIQUE, encrypted_token TEXT, token_expires_at INTEGER, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_accounts_workspace ON instagram_accounts(workspace_id);
+CREATE TABLE IF NOT EXISTS flows (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, account_id TEXT NOT NULL REFERENCES instagram_accounts(id) ON DELETE CASCADE, name TEXT NOT NULL, trigger_type TEXT NOT NULL CHECK(trigger_type IN ('comment_keyword','comment_any','story_reply','dm_keyword')), scope TEXT NOT NULL CHECK(scope IN ('all','next','selected')), configuration TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)), version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE INDEX IF NOT EXISTS idx_flows_account ON flows(account_id,enabled);
+CREATE TABLE IF NOT EXISTS flow_media (flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE, media_id TEXT NOT NULL, PRIMARY KEY(flow_id, media_id));
+CREATE TABLE IF NOT EXISTS webhook_events (id TEXT PRIMARY KEY, account_id TEXT, received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, processed INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS execution_log (id TEXT PRIMARY KEY, flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE, event_id TEXT NOT NULL, status TEXT NOT NULL, error TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(flow_id,event_id));
+CREATE INDEX IF NOT EXISTS idx_exec_event ON execution_log(event_id);
