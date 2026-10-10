@@ -1,0 +1,14 @@
+name = "flownexa"
+main = "src/index.js"
+compatibility_date = "2026-10-09"
+workers_dev = true
+
+[vars]
+APP_MODE = "development"
+MESSAGING_ENABLED = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flownexa"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
