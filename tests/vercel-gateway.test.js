@@ -10,6 +10,6 @@ test("Vercel gateway serves hero and animation without backend configuration",as
 });
 test("Vercel gateway rejects cross-origin browser requests",async()=>{
  const previous=process.env.FLOWNEXA_WORKER_ORIGIN;process.env.FLOWNEXA_WORKER_ORIGIN="https://worker.example.com/";
- try{const res=fakeResponse();await handler(fakeRequest("/",{host:"flownexa.vercel.app",origin:"https://attacker.example"}),res);assert.equal(res.statusCode,403)}
+ try{const res=fakeResponse();await handler(fakeRequest("/api/health",{host:"flownexa.vercel.app",origin:"https://attacker.example"}),res);assert.equal(res.statusCode,403)}
  finally{if(previous===undefined)delete process.env.FLOWNEXA_WORKER_ORIGIN;else process.env.FLOWNEXA_WORKER_ORIGIN=previous}
 });
