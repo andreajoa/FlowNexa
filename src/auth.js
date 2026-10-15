@@ -21,6 +21,12 @@ if(url.pathname==="/api/auth/me"&&request.method==="GET")return respond({user});
 if(url.pathname==="/api/auth/logout"&&request.method==="POST"){const token=cookie(request);if(token)await env.DB.prepare("DELETE FROM sessions WHERE id_hash=?").bind(await sha(token)).run();return withCookie(respond({ok:true}),null,true)}
 if(url.pathname==="/api/workspaces"&&request.method==="GET"){const r=await env.DB.prepare("SELECT w.id,w.name,m.role FROM workspaces w JOIN memberships m ON m.workspace_id=w.id WHERE m.user_id=?").bind(user.id).all();return respond({workspaces:r.results})}
 if(url.pathname==="/api/accounts"&&request.method==="GET"){const workspace=url.searchParams.get("workspace");if(!workspace)return respond({error:"workspace_required"},400);const rows=await env.DB.prepare("SELECT a.id,a.username,a.status FROM instagram_accounts a JOIN memberships m ON m.workspace_id=a.workspace_id WHERE a.workspace_id=? AND m.user_id=?").bind(workspace,user.id).all();return respond({accounts:rows.results})}
+if(url.pathname==="/api/executions"&&request.method==="GET"){
+ const workspace=url.searchParams.get("workspace");
+ if(!workspace)return respond({error:"workspace_required"},400);
+ const rows=await env.DB.prepare("SELECT e.id,e.flow_id,e.status,e.error,e.created_at,f.name AS flow_name FROM execution_log e JOIN flows f ON f.id=e.flow_id JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.workspace_id=? AND m.user_id=? ORDER BY e.created_at DESC LIMIT 50").bind(workspace,user.id).all();
+ return respond({executions:rows.results});
+}
 if(url.pathname==="/api/flows"&&request.method==="GET"){const workspace=url.searchParams.get("workspace");if(!workspace)return respond({error:"workspace_required"},400);const rows=await env.DB.prepare("SELECT f.id,f.name,f.trigger_type,f.scope,f.enabled,f.version FROM flows f JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.workspace_id=? AND m.user_id=?").bind(workspace,user.id).all();return respond({flows:rows.results})}
 if(url.pathname.startsWith("/api/flows/") && request.method==="GET"){
  const flowId=url.pathname.split("/")[3];
