@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {parseInstagramEvents,processInstagramWebhook} from "../src/webhook-engine.js";
 
 test("only supported Instagram events are normalized", () => {
- const payload={object:"instagram",entry:[{id:"account-1",changes:[{field:"comments",value:{id:"c1",text:"QUERO",media:{id:"p1"}}},{field:"mentions",value:{id:"c2",text:"ignore"}}],messaging:[{message:{mid:"m1",text:"AJUDA"}},{message:{mid:"m2",text:"echo",is_echo:true}}]}]};
+ const payload={object:"instagram",entry:[{id:"account-1",changes:[{field:"comments",value:{id:"c1",text:"QUERO",media:{id:"p1"}}},{field:"mentions",value:{id:"c2",text:"ignore"}}],messaging:[{sender:{id:"sender-9"},message:{mid:"m1",text:"AJUDA"}},{message:{mid:"m2",text:"echo",is_echo:true}}]}]};
  assert.deepEqual(parseInstagramEvents(payload),[
  {sourceId:"comment:c1",accountId:"account-1",triggerType:"comment",media_id:"p1",text:"QUERO"},
- {sourceId:"dm:m1",accountId:"account-1",triggerType:"dm",media_id:null,text:"AJUDA"}
+ {sourceId:"dm:m1",accountId:"account-1",triggerType:"dm",media_id:null,text:"AJUDA",recipient_id:"sender-9"}
  ]);
  assert.deepEqual(parseInstagramEvents({object:"page",entry:[{id:"x"}]}),[]);
 });
