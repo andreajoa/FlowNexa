@@ -27,3 +27,16 @@
 A real authorized test Instagram user comments the subscribed keyword under a chosen post; the Meta webhook arrives with a verified signature; exactly one matching flow is executed; the permitted Instagram API reply is sent exactly once; the actual delivery status and API response are stored; failures retry without duplicate sends; customer data stays scoped to the workspace. Repeat across separate workspaces and simulate token expiry.
 
 **Do not advertise FlowNexa as production-ready before this acceptance test passes.**
+
+## Vercel deployment (frontend / gateway)
+
+Vercel does not directly host Cloudflare D1 bindings. This repository now includes `vercel.json` and `api/index.js` to route browser requests from Vercel to an existing **HTTPS Cloudflare Worker**, while retaining D1 and webhook processing on Cloudflare.
+
+Before deploying to Vercel:
+1. Deploy and validate the Cloudflare Worker first, with a real D1 ID and secrets; apply D1 migrations.
+2. Set Vercel server-side variable `FLOWNEXA_WORKER_ORIGIN=https://YOUR-WORKER-HOST/` (do not expose an API token or add a path). Keep it out of the client.
+3. Set the Meta OAuth callback URL to `https://YOUR-VERCEL-DOMAIN/api/instagram/callback` both in Meta dashboard and in Cloudflare `META_REDIRECT_URI`. Register signed Instagram webhook URL with the Meta app and validate an actual callback before launch.
+4. Deploy the repo using Vercel's Node.js Functions. Test registration/login (same-site cookies), OAuth, signed callbacks and all APIs through Vercel before promoting.
+5. Do not activate live messages or invite customers until security testing, rate limiting, webhook queueing, API approval and actual delivery validation pass.
+
+**Important:** Vercel is only a gateway in this setup. The application will return 503 if Cloudflare is not configured. This code alone is NOT deploy-ready as a functioning SaaS.
