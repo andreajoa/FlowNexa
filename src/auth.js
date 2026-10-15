@@ -1,3 +1,4 @@
+import {validateFlowConfiguration} from "./flow-validation.js";
 const headers={"content-type":"application/json; charset=utf-8","cache-control":"no-store"};
 const respond=(data,status=200)=>new Response(JSON.stringify(data),{status,headers});
 const enc=new TextEncoder();
@@ -30,13 +31,13 @@ if(url.pathname.startsWith("/api/flows/") && request.method==="GET"){
 if(url.pathname.startsWith("/api/flows/") && request.method==="PATCH"){
  const flowId=url.pathname.split("/")[3];
  if(!flowId||url.pathname.split("/")[4])return respond({error:"not_found"},404);
- const row=await env.DB.prepare("SELECT f.id,f.enabled FROM flows f JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.id=? AND m.user_id=? AND m.role IN ('owner','admin','editor')").bind(flowId,user.id).first();
+ const row=await env.DB.prepare("SELECT f.id,f.enabled,f.trigger_type,f.scope FROM flows f JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.id=? AND m.user_id=? AND m.role IN ('owner','admin','editor')").bind(flowId,user.id).first();
  if(!row)return respond({error:"forbidden"},403);
  if(row.enabled)return respond({error:"pause_before_edit"},409);
  const b=await payload(request);
  const name=String(b.name||"").trim();const config=b.configuration;
  if(name.length<2||name.length>100||!config||!Array.isArray(config.actions)||config.actions.length>30)return respond({error:"invalid_flow"},400);
- const actions=new Set(["log","draft_message","draft_private_reply"]);
+ const validation=validateFlowConfiguration(row.trigger_type,row.scope,config);if(!validation.ok)return respond({error:validation.error},400);const actions=new Set(["log","draft_message","draft_private_reply"]);
  if(!config.actions.every(x=>x&&actions.has(x.type) && (x.type==="log" || (typeof x.text==="string" && x.text.trim().length>0 && x.text.length<=1000)))||JSON.stringify(config).length>16000)return respond({error:"invalid_actions"},400);
  await env.DB.prepare("UPDATE flows SET name=?,configuration=?,version=version+1 WHERE id=?").bind(name,JSON.stringify(config),flowId).run();
  return respond({id:flowId,enabled:false,updated:true});
@@ -50,7 +51,7 @@ if(url.pathname.startsWith("/api/flows/") && request.method==="POST"){
  await env.DB.prepare("UPDATE flows SET enabled=0,version=version+1 WHERE id=?").bind(flowId).run();
  return respond({id:flowId,enabled:false});
 }
-if(url.pathname==="/api/flows"&&request.method==="POST"){const b=await payload(request);if(!b.workspace_id||!b.account_id||typeof b.name!=="string"||b.name.length<2||b.name.length>100)return respond({error:"invalid_flow"},400);if(!["comment_keyword","comment_any","story_reply","dm_keyword"].includes(b.trigger_type)||!["all","next","selected"].includes(b.scope))return respond({error:"invalid_trigger"},400);const rights=await env.DB.prepare("SELECT m.role FROM memberships m JOIN instagram_accounts a ON a.workspace_id=m.workspace_id WHERE m.user_id=? AND m.workspace_id=? AND a.id=?").bind(user.id,b.workspace_id,b.account_id).first();if(!rights||rights.role==="viewer")return respond({error:"forbidden"},403);const c=b.configuration||{};if(b.scope==="selected"&&(!Array.isArray(c.media_ids)||!c.media_ids.length))return respond({error:"selected_media_required"},400);if(!Array.isArray(c.actions)||c.actions.length>30||JSON.stringify(c).length>16000)return respond({error:"invalid_actions"},400);const permitted=new Set(["log","draft_message","draft_private_reply"]);if(!c.actions.every(a=>a && permitted.has(a.type) && (a.type==="log" || (typeof a.text==="string" && a.text.trim().length>0 && a.text.length<=1000))))return respond({error:"unsupported_action"},400);const id=crypto.randomUUID();await env.DB.prepare("INSERT INTO flows(id,workspace_id,account_id,name,trigger_type,scope,configuration,enabled) VALUES(?,?,?,?,?,?,?,0)").bind(id,b.workspace_id,b.account_id,b.name,b.trigger_type,b.scope,JSON.stringify(c)).run();return respond({id,enabled:false},201)}
+if(url.pathname==="/api/flows"&&request.method==="POST"){const b=await payload(request);if(!b.workspace_id||!b.account_id||typeof b.name!=="string"||b.name.length<2||b.name.length>100)return respond({error:"invalid_flow"},400);if(!["comment_keyword","comment_any","story_reply","dm_keyword"].includes(b.trigger_type)||!["all","next","selected"].includes(b.scope))return respond({error:"invalid_trigger"},400);const rights=await env.DB.prepare("SELECT m.role FROM memberships m JOIN instagram_accounts a ON a.workspace_id=m.workspace_id WHERE m.user_id=? AND m.workspace_id=? AND a.id=?").bind(user.id,b.workspace_id,b.account_id).first();if(!rights||rights.role==="viewer")return respond({error:"forbidden"},403);const c=b.configuration||{};const validation=validateFlowConfiguration(b.trigger_type,b.scope,c);if(!validation.ok)return respond({error:validation.error},400);if(b.scope==="selected"&&(!Array.isArray(c.media_ids)||!c.media_ids.length))return respond({error:"selected_media_required"},400);if(!Array.isArray(c.actions)||c.actions.length>30||JSON.stringify(c).length>16000)return respond({error:"invalid_actions"},400);const permitted=new Set(["log","draft_message","draft_private_reply"]);if(!c.actions.every(a=>a && permitted.has(a.type) && (a.type==="log" || (typeof a.text==="string" && a.text.trim().length>0 && a.text.length<=1000))))return respond({error:"unsupported_action"},400);const id=crypto.randomUUID();await env.DB.prepare("INSERT INTO flows(id,workspace_id,account_id,name,trigger_type,scope,configuration,enabled) VALUES(?,?,?,?,?,?,?,0)").bind(id,b.workspace_id,b.account_id,b.name,b.trigger_type,b.scope,JSON.stringify(c)).run();return respond({id,enabled:false},201)}
 return respond({error:"not_found"},404)
 }catch{return respond({error:"request_failed"},400)}
 }
