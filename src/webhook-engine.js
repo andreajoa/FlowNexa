@@ -19,8 +19,8 @@ export function parseInstagramEvents(payload) {
     for (const message of Array.isArray(entry.messaging) ? entry.messaging : []) {
       const msg=message?.message;
       const id=String(msg?.mid || "");
-      if (!id || !string(msg?.text) || msg.is_echo) continue;
-      events.push({sourceId:"dm:"+id,accountId,triggerType:"dm",media_id:null,text:msg.text});
+      if (!id || !string(msg?.text) || msg.is_echo || !message?.sender?.id) continue;
+      events.push({sourceId:"dm:"+id,accountId,triggerType:"dm",media_id:null,text:msg.text,recipient_id:String(message.sender.id)});
     }
   }
   return events;
