@@ -1,0 +1,4 @@
+import test from "node:test";import assert from "node:assert/strict";import handler from "../api/index.js";
+function request(url){return {url,method:"GET",headers:{host:"flownexa.vercel.app"}}}
+function response(){return {statusCode:200,headers:{},setHeader(k,v){this.headers[k]=v},end(x){this.body=String(x||"")}}}
+test("public website renders without Cloudflare configuration",async()=>{const previous=process.env.FLOWNEXA_WORKER_ORIGIN;delete process.env.FLOWNEXA_WORKER_ORIGIN;try{let r=response();await handler(request("/"),r);assert.equal(r.statusCode,200);assert.match(r.body,/Automação/);r=response();await handler(request("/landing.js"),r);assert.equal(r.statusCode,200);assert.match(r.body,/conversation/);r=response();await handler(request("/api/health"),r);assert.equal(r.statusCode,503)}finally{if(previous!==undefined)process.env.FLOWNEXA_WORKER_ORIGIN=previous}});
