@@ -1,9 +1,22 @@
+import {landingPage} from "../src/landing.js";
+import {landingClient} from "../src/landing-script.js";
 // Vercel HTTP gateway for a Cloudflare Worker/D1 backend.
 // Configure FLOWNEXA_WORKER_ORIGIN to the HTTPS origin of your Worker.
 // Never proxy arbitrary URLs supplied by clients.
 export const config={api:{bodyParser:false}};
 const MAX_BODY=1024*1024;
 export default async function handler(req,res){
+ const pathname=new URL(req.url||"/","https://flownexa.invalid").pathname;
+ if(req.method==="GET" && (pathname==="/"||pathname==="/landing.js")){
+  const script=pathname==="/landing.js";
+  res.statusCode=200;
+  res.setHeader("content-type",script?"application/javascript; charset=utf-8":"text/html; charset=utf-8");
+  res.setHeader("cache-control",script?"public, max-age=300":"public, max-age=60");
+  res.setHeader("x-content-type-options","nosniff");
+  if(!script)res.setHeader("content-security-policy","default-src 'self'; img-src 'self' https://images.unsplash.com; script-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+  return res.end(script?landingClient():landingPage());
+ }
+
  let backend;
  try{backend=new URL(process.env.FLOWNEXA_WORKER_ORIGIN||"");if(backend.protocol!=="https:"||backend.username||backend.password||backend.pathname!=="/")throw Error("invalid")}
  catch{res.statusCode=503;return res.end("Backend not configured");}
