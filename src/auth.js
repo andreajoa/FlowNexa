@@ -20,6 +20,26 @@ if(url.pathname==="/api/auth/logout"&&request.method==="POST"){const token=cooki
 if(url.pathname==="/api/workspaces"&&request.method==="GET"){const r=await env.DB.prepare("SELECT w.id,w.name,m.role FROM workspaces w JOIN memberships m ON m.workspace_id=w.id WHERE m.user_id=?").bind(user.id).all();return respond({workspaces:r.results})}
 if(url.pathname==="/api/accounts"&&request.method==="GET"){const workspace=url.searchParams.get("workspace");if(!workspace)return respond({error:"workspace_required"},400);const rows=await env.DB.prepare("SELECT a.id,a.username,a.status FROM instagram_accounts a JOIN memberships m ON m.workspace_id=a.workspace_id WHERE a.workspace_id=? AND m.user_id=?").bind(workspace,user.id).all();return respond({accounts:rows.results})}
 if(url.pathname==="/api/flows"&&request.method==="GET"){const workspace=url.searchParams.get("workspace");if(!workspace)return respond({error:"workspace_required"},400);const rows=await env.DB.prepare("SELECT f.id,f.name,f.trigger_type,f.scope,f.enabled,f.version FROM flows f JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.workspace_id=? AND m.user_id=?").bind(workspace,user.id).all();return respond({flows:rows.results})}
+if(url.pathname.startsWith("/api/flows/") && request.method==="GET"){
+ const flowId=url.pathname.split("/")[3];
+ if(!flowId||url.pathname.split("/")[4])return respond({error:"not_found"},404);
+ const flow=await env.DB.prepare("SELECT f.id,f.name,f.trigger_type,f.scope,f.configuration,f.enabled,f.version FROM flows f JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.id=? AND m.user_id=?").bind(flowId,user.id).first();
+ return flow?respond({flow}):respond({error:"not_found"},404);
+}
+if(url.pathname.startsWith("/api/flows/") && request.method==="PATCH"){
+ const flowId=url.pathname.split("/")[3];
+ if(!flowId||url.pathname.split("/")[4])return respond({error:"not_found"},404);
+ const row=await env.DB.prepare("SELECT f.id,f.enabled FROM flows f JOIN memberships m ON m.workspace_id=f.workspace_id WHERE f.id=? AND m.user_id=? AND m.role IN ('owner','admin','editor')").bind(flowId,user.id).first();
+ if(!row)return respond({error:"forbidden"},403);
+ if(row.enabled)return respond({error:"pause_before_edit"},409);
+ const b=await payload(request);
+ const name=String(b.name||"").trim();const config=b.configuration;
+ if(name.length<2||name.length>100||!config||!Array.isArray(config.actions)||config.actions.length>30)return respond({error:"invalid_flow"},400);
+ const actions=new Set(["log","draft_message","draft_private_reply"]);
+ if(!config.actions.every(x=>x&&actions.has(x.type))||JSON.stringify(config).length>16000)return respond({error:"invalid_actions"},400);
+ await env.DB.prepare("UPDATE flows SET name=?,configuration=?,version=version+1 WHERE id=?").bind(name,JSON.stringify(config),flowId).run();
+ return respond({id:flowId,enabled:false,updated:true});
+}
 if(url.pathname.startsWith("/api/flows/") && request.method==="POST"){
  const flowId=url.pathname.split("/")[3];
  const operation=url.pathname.split("/")[4];
