@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {outboundAuthorized,sendCommentReply,sendPrivateReply} from "../src/meta-delivery.js";
+import {outboundAuthorized,sendCommentReply,sendPrivateReply,sendDirectMessage} from "../src/meta-delivery.js";
 const env={APP_MODE:"production",MESSAGING_ENABLED:"true",META_LIVE_SEND_APPROVED:"true",META_API_VERSION:"v22.0"};
 test("outbound always fails closed without all approval signals",async()=>{
  let called=false;const fetcher=async()=>{called=true;throw Error("must never send")};
@@ -27,4 +27,12 @@ test("API errors do not expose response secrets and rate limits can retry",async
  const fetcher=async()=>({ok:false,status:429,json:async()=>({error:{message:"sensitive"}})});
  const result=await sendCommentReply(env,{commentId:"123",text:"Hello",accessToken:"token"},{authorized:true,fetcher});
  assert.deepEqual(result,{ok:false,error:"meta_api_error",status:429,retryable:true});
+});
+
+test("direct message can only address valid Instagram scoped IDs",async()=>{
+ let called=0;
+ const fetcher=async(url,options)=>{called++;assert.equal(JSON.parse(options.body).recipient.id,"123456");return {ok:true,json:async()=>({message_id:"msg1"})}};
+ assert.equal((await sendDirectMessage(env,{recipientId:"invalid",text:"Hello",accessToken:"token"},{authorized:true,fetcher})).error,"invalid_input");
+ assert.equal(called,0);
+ assert.equal((await sendDirectMessage(env,{recipientId:"123456",text:"Hello",accessToken:"token"},{authorized:true,fetcher})).ok,true);
 });
