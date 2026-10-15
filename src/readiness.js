@@ -5,7 +5,7 @@ export function validateProductionConfiguration(env) {
  }
  if(!env.DB)missing.push("DB");
  if(env.APP_MODE!=="production")missing.push("APP_MODE=production");
- if(env.MESSAGING_ENABLED!=="false")missing.push("MESSAGING_ENABLED=false until live delivery is certified");
+ if(env.MESSAGING_ENABLED!=="false" && !(env.MESSAGING_ENABLED==="true" && env.META_LIVE_SEND_APPROVED==="true"))missing.push("messaging kill switch or explicit approval required");
  if(env.META_REDIRECT_URI && (!env.META_REDIRECT_URI.startsWith("https://") || !new URL(env.META_REDIRECT_URI).pathname.endsWith("/api/instagram/callback")))missing.push("valid META_REDIRECT_URI");
  if(env.TOKEN_ENCRYPTION_KEY && !/^[a-f0-9]{64}$/i.test(env.TOKEN_ENCRYPTION_KEY))missing.push("TOKEN_ENCRYPTION_KEY (64 hex chars)");
  if(env.SESSION_SECRET && env.SESSION_SECRET.length<32)missing.push("SESSION_SECRET (at least 32 chars)");
