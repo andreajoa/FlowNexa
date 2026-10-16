@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "npx --yes vercel@63.1.2 dev",
     "test": "node --test",
     "check": "node --check src/index.js",
-    "deploy": "wrangler deploy"
+    "deploy": "npx --yes vercel@63.1.2 deploy",
+    "migrate": "node scripts/migrate.js"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.10.1"
   }
 }
