@@ -1,14 +1,24 @@
+import {billingAccess} from './billing.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {sha} from './identity.js';
 import {matchFlow,normalizeWebhook} from './flow-runtime.js';
 import {sendAction,messagingReady} from './meta-client.js';
 export async function enqueueWebhook(body,env){
  const events=normalizeWebhook(body);let queued=0;
- if(events.length>100)throw Error('webhook_batch_too_large');
+ // Meta can aggregate up to 1000 updates. Reject larger envelopes before writing.
+ if(events.length>1000)throw Error('webhook_batch_too_large');
+ const accounts=new Map(),statements=[];
  for(const event of events){
-  const account=await env.DB.prepare("SELECT id,workspace_id FROM instagram_accounts WHERE ig_user_id=? AND status='connected'").bind(event.account).first();if(!account)continue;
+  if(!accounts.has(event.account))accounts.set(event.account,await env.DB.prepare("SELECT id,workspace_id FROM instagram_accounts WHERE ig_user_id=? AND status='connected'").bind(event.account).first());
+  const account=accounts.get(event.account);if(!account)continue;
   const id=await sha(account.id+':'+event.key),now=Date.now();
-  const result=await env.DB.prepare('INSERT OR IGNORE INTO automation_events(id,account_id,workspace_id,encrypted_event,received_at,event_at,due_at) VALUES (?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),now,event.at,now).run();queued+=result.meta.changes;
+  statements.push(env.DB.prepare('INSERT OR IGNORE INTO automation_events(id,account_id,workspace_id,encrypted_event,received_at,event_at,due_at) VALUES (?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),now,event.at,now));
+ }
+ // Bounded database requests; a failed chunk is retried through Meta's webhook retry.
+ // Event IDs make partially committed envelopes safe to replay without duplicate sends.
+ for(let i=0;i<statements.length;i+=50){
+  const results=await env.DB.batch(statements.slice(i,i+50));
+  queued+=results.reduce((sum,result)=>sum+result.meta.changes,0);
  }
  return queued;
 }
@@ -16,6 +26,7 @@ async function processEvent(env,row,deadline){
  const event=JSON.parse(await decryptToken(row.encrypted_event,env.TOKEN_ENCRYPTION_KEY));
  const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();
  if(!account||account.status!=='connected')return 'cancelled';
+ if(!await billingAccess(env,account.workspace_id)){await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='billing_subscription_required',completed_at=? WHERE event_id=? AND status='pending'").bind(Date.now(),row.id).run();return 'cancelled';}
  let jobs=await env.DB.prepare('SELECT * FROM automation_jobs WHERE event_id=? ORDER BY action_index').bind(row.id).all();
  if(!jobs.results.length){
   const flows=await env.DB.prepare('SELECT * FROM flows WHERE account_id=? AND enabled=1 ORDER BY created_at,id').bind(account.id).all();
@@ -43,8 +54,9 @@ async function processEvent(env,row,deadline){
   if(Date.now()>deadline){const error=Error('processing_deferred');error.deferred=true;throw error;}
   const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(job.flow_id).first();
   const current=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(account.id).first();
-  if(!flow?.enabled||flow.version!==job.flow_version||current?.status!=='connected'){
-   await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='flow_or_account_changed',completed_at=? WHERE id=? AND status='pending'").bind(Date.now(),job.id).run();continue;
+  const subscriptionActive=await billingAccess(env,account.workspace_id);
+  if(!flow?.enabled||flow.version!==job.flow_version||current?.status!=='connected'||!subscriptionActive){
+   await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error=?,completed_at=? WHERE id=? AND status='pending'").bind(subscriptionActive?'flow_or_account_changed':'billing_subscription_required',Date.now(),job.id).run();continue;
   }
   // Extend the lease, then reserve this effect before any provider request.
   const lease=await env.DB.prepare("UPDATE automation_events SET lease_until=? WHERE id=? AND lease_id=? AND status='processing' RETURNING id").bind(Date.now()+60000,row.id,row.lease_id).first();if(!lease)return 'lease_lost';

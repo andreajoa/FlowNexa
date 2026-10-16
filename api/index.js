@@ -3,9 +3,7 @@ import {D1Rest} from '../src/d1-rest.js';
 import {waitUntil} from '@vercel/functions';
 import {landingPage} from "../src/landing.js";
 import {landingClient} from "../src/landing-script.js";
-// Vercel HTTP gateway for a Cloudflare Worker/D1 backend.
-// Configure FLOWNEXA_WORKER_ORIGIN to the HTTPS origin of your Worker.
-// Never proxy arbitrary URLs supplied by clients.
+// Vercel HTTP gateway: the application uses D1 through server-only credentials.
 export const config={api:{bodyParser:false}};
 const MAX_BODY=1024*1024;
 export default async function handler(req,res){
@@ -28,7 +26,7 @@ export default async function handler(req,res){
  if(origin&&origin!==publicOrigin){res.statusCode=403;return res.end('Forbidden origin');}
  if(req.headers['x-forwarded-proto']&&req.headers['x-forwarded-proto']!=='https'){res.statusCode=403;return res.end('HTTPS required');}
  const headers=new Headers();
- for(const key of ['accept','accept-language','content-type','cookie','x-hub-signature-256','user-agent','authorization','svix-id','svix-timestamp','svix-signature']){const value=req.headers[key];if(typeof value==='string')headers.set(key,value);}
+ for(const key of ['accept','accept-language','content-type','cookie','x-hub-signature-256','stripe-signature','user-agent','authorization','svix-id','svix-timestamp','svix-signature']){const value=req.headers[key];if(typeof value==='string')headers.set(key,value);}
  if(origin)headers.set('origin',publicOrigin);
  // Vercel overwrites x-vercel-forwarded-for at its edge. Never trust incoming cf-connecting-ip.
  headers.set('cf-connecting-ip',String(req.headers['x-vercel-forwarded-for']||'unknown').split(',')[0].trim());

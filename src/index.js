@@ -1,3 +1,4 @@
+import {billingApi,stripeWebhook} from './billing.js';
 import {refreshAccounts,deauthorize} from './account-lifecycle.js';
 import {legalPage} from './legal.js';
 import {appPage} from './app-ui.js';
@@ -18,7 +19,7 @@ export default {async fetch(request,env,ctx={}){
  const url=new URL(request.url),path=url.pathname;
  const legal=legalPage(path);if(legal&&request.method==='GET')return new Response(legal,{headers:{'content-type':'text/html; charset=utf-8','x-content-type-options':'nosniff'}});
  if(request.method==='GET'&&['/app','/app/','/app.js'].includes(path)){
-  const script=path==='/app.js';return new Response(script?appClient():appPage(),{headers:{'content-type':script?'application/javascript; charset=utf-8':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}});
+  const script=path==='/app.js';return new Response(script?appClient():appPage(),{headers:{'content-type':script?'application/javascript; charset=utf-8':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; connect-src 'self' https://api.stripe.com https://r.stripe.com https://m.stripe.network https://checkout.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}});
  }
  if(path==='/api/health'&&request.method==='GET'){
   if(!env.DB)return json({status:'degraded',database:false},503);
@@ -28,6 +29,8 @@ export default {async fetch(request,env,ctx={}){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
   const [queue,accounts]=await Promise.all([processPending(env),refreshAccounts(env)]);return json({...queue,accounts});
  }
+ if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
+ if(path.startsWith('/api/billing/'))return billingApi(request,env);
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);
  if(path.startsWith('/api/auth/')||path==='/api/workspaces'||path==='/api/accounts')return accountApi(request,env);
