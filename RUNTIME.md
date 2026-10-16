@@ -1,0 +1,28 @@
+# FlowNexa runtime
+
+The approved public landing remains in `src/landing.js` and `src/landing-script.js`.
+The private application is `/app`; Vercel executes `api/index.js` directly and persists data with the Cloudflare D1 REST API. No Worker proxy origin is required.
+
+## Configuration
+
+Use server-only Vercel environment settings from `.env.example`. Generate an independent 32-byte hex token encryption key. Never rotate this key without re-encrypting existing records. Account emails use the verified FlowNexa Resend domain. Apply immutable migrations using `node scripts/migrate.js` with the D1 environment supplied privately.
+
+Meta requires an Instagram app with Instagram Login. Configure its exact redirect URI, callback `https://flownex.online/webhooks/instagram`, verification token and `comments,messages` fields. Request `instagram_business_basic`, `instagram_business_manage_comments`, `instagram_business_manage_messages`. Account OAuth subscribes and confirms the app-level account subscription before saving a connected account. Production access to third-party accounts depends on Meta app eligibility and approvals; local mocks do not establish approval.
+
+The minute scheduler in `scheduler/` invokes the fixed authenticated internal tick endpoint. Keep its CRON_SECRET identical to Vercel. The public handler never starts jobs. The endpoint rejects unauthenticated ticks. Verify a scheduled invocation after any release.
+
+## Operation semantics
+
+Flows are created as drafts. Editing pauses a flow and increments its version. Publishing requires a configured sender and connected, unexpired account. Set MESSAGING_ENABLED=true only after completing the authorized Meta account test. Simulation never sends.
+
+For an interaction matching more than one flow, the oldest matching enabled flow wins (created_at then id). Each comment has one private reply effect across all flows. Contact-once suppression is per flow/account and requires a known interaction author. Own comments and nested replies are ignored to prevent response loops. Only selected/all media scopes are supported.
+
+A verified webhook is stored encrypted before acknowledgement. Concurrent consumers use atomic leases and durable action reservations. Each successful provider response must include a message/comment ID. `accepted` means API acceptance, not delivery or read confirmation. An ambiguous POST result is `unknown`; do not retry it automatically. Investigate with Meta before any manual recovery. A rejected 429 can retry with bounded exponential backoff. A flow pause/version change cancels actions not already being sent; it cannot recall a request already handed to Meta.
+
+Instagram private replies recheck the original comment timestamp through Meta. Direct replies require an inbound interaction within 24 hours. There are no unsolicited recipient uploads or human-agent window exceptions. Private comment rules must also be validated against the app's current Meta policy before launch, including live content eligibility.
+
+## Release verification
+
+Run `npm ci --ignore-scripts`, `npm test`, `npm run check`. Tests use real SQLite for tenant isolation, recovery tokens, queue leases, duplicate events, pauses, expiry, rate limits, uncertain responses and provider acceptance persistence failures. UI browser smoke verifies editing and mobile overflow; it is not a real Instagram integration test.
+
+Release only after comparing public landing sources and assets with current origin/main. Test the deployed app, D1 health, verification email delivery, Meta OAuth/subscriptions, one authorized Instagram interaction, its provider ID and the periodic retry invocation. Until that Instagram test passes, describe the product as integration pending, never fully operational.

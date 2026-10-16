@@ -1,0 +1,15 @@
+name = "flownexa-runner"
+main = "runner.js"
+compatibility_date = "2026-10-15"
+workers_dev = true
+preview_urls = false
+
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# CRON_SECRET must be provided as a Cloudflare secret binding.
+# The target application and its public website remain hosted on Vercel.

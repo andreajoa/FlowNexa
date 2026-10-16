@@ -1,3 +1,6 @@
+import runtime from '../src/index.js';
+import {D1Rest} from '../src/d1-rest.js';
+import {waitUntil} from '@vercel/functions';
 import {landingPage} from "../src/landing.js";
 import {landingClient} from "../src/landing-script.js";
 // Vercel HTTP gateway for a Cloudflare Worker/D1 backend.
@@ -17,37 +20,29 @@ export default async function handler(req,res){
   return res.end(script?landingClient():landingPage());
  }
 
- let backend;
- try{backend=new URL(process.env.FLOWNEXA_WORKER_ORIGIN||"");if(backend.protocol!=="https:"||backend.username||backend.password||backend.pathname!=="/")throw Error("invalid")}
- catch{res.statusCode=503;return res.end("Backend not configured");}
  const host=req.headers.host;
- if(!host||/[\\/\s]/.test(host)){res.statusCode=400;return res.end("Invalid host");}
- const publicOrigin="https://"+host;
+ if(!host||/[\\/\s]/.test(host)){res.statusCode=400;return res.end('Invalid host');}
+ const publicOrigin='https://'+host;
  const origin=req.headers.origin;
- if(origin && origin!==publicOrigin){res.statusCode=403;return res.end("Forbidden origin");}
- const path=String(req.url||"/");
- const target=new URL(path,backend);
- if(target.origin!==backend.origin){res.statusCode=400;return res.end("Invalid path");}
+ // Signed callbacks and webhooks do not use browser Origin; identity writes enforce it.
+ if(origin&&origin!==publicOrigin){res.statusCode=403;return res.end('Forbidden origin');}
+ if(req.headers['x-forwarded-proto']&&req.headers['x-forwarded-proto']!=='https'){res.statusCode=403;return res.end('HTTPS required');}
  const headers=new Headers();
- for(const key of ["accept","accept-language","content-type","cookie","x-hub-signature-256","user-agent"]){
-  const value=req.headers[key];if(typeof value==="string")headers.set(key,value);
- }
- if(origin)headers.set("origin",backend.origin);
- if(req.headers["x-forwarded-proto"] && req.headers["x-forwarded-proto"]!=="https"){res.statusCode=403;return res.end("HTTPS required");}
+ for(const key of ['accept','accept-language','content-type','cookie','x-hub-signature-256','user-agent','authorization','svix-id','svix-timestamp','svix-signature']){const value=req.headers[key];if(typeof value==='string')headers.set(key,value);}
+ if(origin)headers.set('origin',publicOrigin);
+ // Vercel overwrites x-vercel-forwarded-for at its edge. Never trust incoming cf-connecting-ip.
+ headers.set('cf-connecting-ip',String(req.headers['x-vercel-forwarded-for']||'unknown').split(',')[0].trim());
  let body;
- if(!["GET","HEAD"].includes(req.method)){
-  const chunks=[];let total=0;
-  for await(const chunk of req){total+=chunk.length;if(total>MAX_BODY){res.statusCode=413;return res.end("Payload too large");}chunks.push(chunk)}
-  body=Buffer.concat(chunks);
+ if(!['GET','HEAD'].includes(req.method)){
+  const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>MAX_BODY){res.statusCode=413;return res.end('Payload too large');}chunks.push(chunk);}body=Buffer.concat(chunks);
  }
  try{
-  const response=await fetch(target,{method:req.method,headers,body,redirect:"manual",signal:AbortSignal.timeout(20000)});
+  const env={...process.env};
+  if(env.CLOUDFLARE_ACCOUNT_ID&&env.CLOUDFLARE_D1_DATABASE_ID&&env.CLOUDFLARE_D1_TOKEN)env.DB=new D1Rest({accountId:env.CLOUDFLARE_ACCOUNT_ID,databaseId:env.CLOUDFLARE_D1_DATABASE_ID,token:env.CLOUDFLARE_D1_TOKEN});
+  const target=new URL(req.url||'/',publicOrigin);if(target.origin!==publicOrigin){res.statusCode=400;return res.end('Invalid path');}
+  const response=await runtime.fetch(new Request(target,{method:req.method,headers,body}),env,{waitUntil});
   res.statusCode=response.status;
-  for(const key of ["content-type","cache-control","set-cookie","content-security-policy","x-content-type-options"]){
-    const value=response.headers.get(key);if(value)res.setHeader(key,value);
-  }
-  const location=response.headers.get("location");
-  if(location){const url=new URL(location,backend);if(url.origin===backend.origin)res.setHeader("location",publicOrigin+url.pathname+url.search);}
+  for(const[key,value]of response.headers)res.setHeader(key,value);
   res.end(Buffer.from(await response.arrayBuffer()));
- }catch{res.statusCode=502;res.end("Backend temporarily unavailable")}
+ }catch{res.statusCode=503;res.end('Service temporarily unavailable');}
 }

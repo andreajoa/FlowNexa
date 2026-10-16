@@ -1,0 +1,2 @@
+# FlowNexa runtime
+Instagram automation SaaS, creators/businesses/agencies. Public landing at main 019b321 must remain byte-for-byte unchanged. Vercel dedicated team flownexa3/project flownexa; D1 dedicated flownexa via server-only REST adapter. Existing main proxies unconfigured Worker; actual /app and /api/health return503. Resend project domain verified; Meta app ID/secret absent. No credentials or customer data in this directory.
