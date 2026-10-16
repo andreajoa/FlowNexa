@@ -1,5 +1,5 @@
 import {decryptToken} from './instagram-oauth.js';
-export function messagingReady(env){return env.MESSAGING_ENABLED==='true'&&Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.TOKEN_ENCRYPTION_KEY);}
+export function messagingReady(env){return env.MESSAGING_ENABLED==='true'&&Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET&&env.TOKEN_ENCRYPTION_KEY);}
 export async function metaRequest(env,account,path,{method='GET',body}={}){
  if(account.status!=='connected'||account.token_expires_at<=Date.now()/1000)throw Error('account_reconnect_required');
  const token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);
