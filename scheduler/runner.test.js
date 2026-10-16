@@ -8,7 +8,7 @@ test('scheduled runner posts only to the fixed Vercel endpoint with authorizatio
   assert.equal(call.url, TICK_URL);
   assert.equal(call.options.method, 'POST');
   assert.equal(call.options.headers.authorization, 'Bearer ' + env.CRON_SECRET);
-  assert.equal(call.options.redirect, 'error');
+  assert.equal(call.options.redirect, 'manual');
   assert.deepEqual(result, { processed: 3, sent: 2 });
 });
 test('runner fails visibly for rejected requests and never follows redirects', async () => {

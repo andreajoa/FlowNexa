@@ -51,7 +51,7 @@ export async function runtimeApi(request,env){
    if(a[2]==='disconnect'&&request.method==='POST'){
     // Disable locally first, even if the provider is temporarily unreachable.
     await env.DB.batch([env.DB.prepare('UPDATE flows SET enabled=0,version=version+1 WHERE account_id=?').bind(account.id),env.DB.prepare("UPDATE instagram_accounts SET status='disconnected',encrypted_token=NULL,token_expires_at=NULL WHERE id=?").bind(account.id)]);
-    try{await metaRequest(env,account,`${account.ig_user_id}/subscribed_apps`,{method:'DELETE'});}catch{}
+    try{await metaRequest(env,account,'me/subscribed_apps',{method:'DELETE'});}catch{}
     return J({ok:true});
    }
   }

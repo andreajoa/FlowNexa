@@ -17,10 +17,10 @@ const env={DB:db,RESEND_API_KEY:'fake-browser-key',PUBLIC_BASE_URL:'https://flow
 env.RESEND_FETCH=async(url,options)=>{assert.equal(String(url),'https://api.resend.com/emails');sent.push(JSON.parse(options.body));return Response.json({id:'fake-browser-mail-'+sent.length});};
 env.META_FETCH=async(input,options={})=>{
  const url=new URL(input);metaCalls.push({path:url.pathname,method:options.method||'GET'});
- if(url.hostname==='api.instagram.com'&&url.pathname==='/oauth/access_token')return Response.json({access_token:'fake-short-token',user_id:12345});
+ if(url.hostname==='api.instagram.com'&&url.pathname==='/oauth/access_token')return Response.json({access_token:'fake-short-token',user_id:98765});
  if(url.hostname==='graph.instagram.com'&&url.pathname==='/access_token')return Response.json({access_token:'fake-long-token',token_type:'bearer',expires_in:5184000});
  if(url.hostname==='graph.instagram.com'&&url.pathname==='/me')return Response.json({user_id:'12345',username:'browser_test_brand',account_type:'BUSINESS'});
- if(url.hostname==='graph.instagram.com'&&url.pathname==='/v24.0/12345/subscribed_apps')return Response.json(options.method==='POST'?{success:true}:{data:[{id:'123',subscribed_fields:['comments','messages']}]});
+ if(url.hostname==='graph.instagram.com'&&url.pathname==='/v24.0/me/subscribed_apps')return Response.json(options.method==='POST'?{success:true}:{data:[{id:'123',subscribed_fields:['comments','messages']}]});
  if(url.hostname==='graph.instagram.com'&&url.pathname==='/v24.0/999/replies')return Response.json({id:'provider-accepted-reference'});
  if(url.hostname==='graph.instagram.com'&&url.pathname==='/v24.0/999')return Response.json({id:'999',timestamp:new Date().toISOString()});
  if(url.hostname==='graph.instagram.com'&&url.pathname==='/v24.0/12345/messages')return Response.json({}); // Deliberately uncertain provider result.
