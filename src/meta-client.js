@@ -1,12 +1,14 @@
 import {decryptToken} from './instagram-oauth.js';
 export function messagingReady(env){return env.MESSAGING_ENABLED==='true'&&Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET&&env.TOKEN_ENCRYPTION_KEY);}
 export async function metaRequest(env,account,path,{method='GET',body}={}){
+ const remaining=env.RUNTIME_DEADLINE_MS?env.RUNTIME_DEADLINE_MS-Date.now()-1500:15000;
+ if(remaining<1000){const error=Error('processing_deferred');error.deferred=true;error.retryable=true;throw error;}
  if(account.status!=='connected'||account.token_expires_at<=Date.now()/1000)throw Error('account_reconnect_required');
  const token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);
  const version=env.META_API_VERSION||'v24.0';if(!/^v\d+\.0$/.test(version))throw Error('invalid_meta_version');
  const url=new URL(`https://graph.instagram.com/${version}/${path}`);
  const headers={'authorization':'Bearer '+token};if(body)headers['content-type']='application/json';
- let response;try{response=await (env.META_FETCH||fetch)(url,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});}catch(error){error.retryable=method==='GET';throw error;}
+ let response;try{response=await (env.META_FETCH||fetch)(url,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(Math.min(15000,remaining))});}catch(error){error.retryable=method==='GET';throw error;}
  let data;try{data=await response.json();}catch{throw Error(method==='POST'?'delivery_unknown':'meta_invalid_response');}
  if(!response.ok){const error=Error(data?.error?.code===190?'account_reconnect_required':response.status===429?'meta_rate_limited':response.status>=500&&method==='POST'?'delivery_unknown':'meta_request_rejected');error.retryable=response.status===429||response.status>=500&&method==='GET';throw error;}
  return data;

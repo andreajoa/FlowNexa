@@ -9,3 +9,7 @@ Stripe recurring Embedded Checkout and Customer Portal implemented behind explic
 Independent final verification:70/70 automated tests passed;17 Chromium application paths passed with mocked Meta/Resend/Stripe boundaries, including embedded iframe mount/resume and no access granted by completion callback. Independent reviewer approved deployment with Stripe unconfigured and paid enforcement disabled. Production release verification pending. This is not yet a fully verified commercial launch.
 
 Marketing inventory and competitive source references: docs/PRODUCT-GAPS.md. Page offerings such as AI, CRM/tags, delayed follow-ups and external connectors remain planned and must not be sold as implemented.
+
+
+## Atualização de ativação e grafo
+Meta app efetivamente publicado; globalmessagingtrue e fluxoautomacao1 ativo. Webhooks anteriores tiveram403 e nenhum job foi criado. HMAC configurado para a chave do produto Instagram; comentário real recebido e job concluído com ID aceito pela Meta. Confirmação no destinatário ainda pendente. Domínio/categoriaBusiness/site confirmados pela GraphAPI. Grafo de conversas com nós implementado, migração0008aplicada,90testes+19verificaçõesChromium aprovados; revisãoindependentebackendpassou. Deploygrafopendente. Stripecomercialcontinua desconfigurado.

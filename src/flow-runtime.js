@@ -1,9 +1,11 @@
+import {validateGraph} from './conversation-graph.js';
 export const TRIGGERS=new Set(['comment_keyword','comment_any','dm_keyword','story_reply']);
 export function validateFlow(trigger,scope,c){
  if(!TRIGGERS.has(trigger)||!['all','selected'].includes(scope))return {ok:false,error:'unsupported_trigger_or_scope'};
  if(!c||typeof c!=='object'||JSON.stringify(c).length>16000)return {ok:false,error:'invalid_configuration'};
  if(trigger.endsWith('_keyword')&&(!Array.isArray(c.keywords)||!c.keywords.length||c.keywords.length>20||c.keywords.some(x=>typeof x!=='string'||!x.trim()||x.length>80)))return{ok:false,error:'keywords_required'};
  if(scope==='selected'&&(!Array.isArray(c.media_ids)||!c.media_ids.length||c.media_ids.length>100||c.media_ids.some(x=>typeof x!=='string'||!/^\d+$/.test(x))))return{ok:false,error:'selected_media_required'};
+ if(c.graph)return validateGraph(c.graph);
  if(!Array.isArray(c.actions)||!c.actions.length||c.actions.length>5)return{ok:false,error:'actions_required'};
  const allowed=trigger.startsWith('comment')?new Set(['private_reply','public_reply']):new Set(['message']);
  if(c.actions.some(x=>!x||!allowed.has(x.type)||typeof x.text!=='string'||!x.text.trim()||x.text.length>1000))return{ok:false,error:'invalid_actions'};
@@ -18,7 +20,7 @@ export function matchFlow(flow,event){
  if(flow.trigger_type.startsWith('comment')&&event.kind!=='comment'||flow.trigger_type==='dm_keyword'&&event.kind!=='dm'||flow.trigger_type==='story_reply'&&event.kind!=='story')return{matched:false,reason:'trigger'};
  if(flow.scope==='selected'&&!c.media_ids.includes(String(event.media_id)))return{matched:false,reason:'scope'};
  if(flow.trigger_type.endsWith('_keyword')&&!c.keywords.some(w=>normalize(event.text).includes(normalize(w))))return{matched:false,reason:'keyword'};
- return{matched:true,actions:c.actions,configuration:c};
+ return{matched:true,actions:c.graph?[]:c.actions,configuration:c,...(c.graph?{graph:c.graph}:{})};
 }
 export function normalizeWebhook(body,receivedAt=Date.now()){
  const result=[];if(body?.object!=='instagram'||!Array.isArray(body.entry))return result;

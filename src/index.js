@@ -1,3 +1,4 @@
+import {processConversations} from './conversation-runtime.js';
 import {billingApi,stripeWebhook} from './billing.js';
 import {refreshAccounts,deauthorize} from './account-lifecycle.js';
 import {legalPage} from './legal.js';
@@ -15,6 +16,13 @@ export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==
 export function evaluate(flow,event){const c=typeof flow.configuration==='string'?JSON.parse(flow.configuration):flow.configuration;if(!mediaMatch(flow.scope,c.media_ids||[],event.media_id))return{matched:false,reason:'scope'};if(flow.trigger_type.endsWith('_keyword')&&!keywordMatch(event.text,c.keywords))return{matched:false,reason:'keyword'};return{matched:true,actions:c.actions||[]}}
 export async function verifySignature(payload,signature,secret){if(!signature?.startsWith("sha256=")||!secret)return false;const encoder=new TextEncoder();const key=await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const expected=new Uint8Array(await crypto.subtle.sign("HMAC",key,payload));const supplied=signature.slice(7);if(!/^[a-f0-9]{64}$/i.test(supplied))return false;const actual=Uint8Array.from(supplied.match(/../g),x=>parseInt(x,16));let diff=0;for(let i=0;i<expected.length;i++)diff|=expected[i]^actual[i];return diff===0}
 
+async function processQueue(env){
+ const deadline=Date.now()+40000,scoped={...env,RUNTIME_DEADLINE_MS:deadline};
+ const queue=await processPending(scoped,10,deadline);
+ const conversations=await processConversations(scoped,5,deadline);
+ return{...queue,conversations};
+}
+
 export default {async fetch(request,env,ctx={}){
  const url=new URL(request.url),path=url.pathname;
  const legal=legalPage(path);if(legal&&request.method==='GET')return new Response(legal,{headers:{'content-type':'text/html; charset=utf-8','x-content-type-options':'nosniff'}});
@@ -27,7 +35,7 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
-  const [queue,accounts]=await Promise.all([processPending(env),refreshAccounts(env)]);return json({...queue,accounts});
+  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);return json({...queue,accounts});
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
@@ -46,7 +54,7 @@ export default {async fetch(request,env,ctx={}){
   if(!await verifySignature(body,request.headers.get('x-hub-signature-256'),env.META_WEBHOOK_SECRET))return json({error:'invalid_signature'},403);
   if(!env.DB||!env.TOKEN_ENCRYPTION_KEY)return json({error:'database_unavailable'},503);
   let parsed;try{parsed=JSON.parse(new TextDecoder().decode(body));}catch{return json({error:'invalid_payload'},400);}
-  try{const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processPending(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}
+  try{const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processQueue(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}
  }
  return json({error:'not_found'},404);
 }};

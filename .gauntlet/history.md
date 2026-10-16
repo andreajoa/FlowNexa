@@ -23,3 +23,12 @@ Initial diagnosis: real public root works; backend configuration path returns503
 - Fixed100-event webhook rejection to support1000-update envelopes with durable bounded batching and retry-safe partial persistence.
 - Added recurring Stripe Embedded Checkout, canonical webhook-driven status, Customer Portal and opt-in paid execution enforcement. Corrected UI mode to embedded_page based on version-pinned official SDK.
 - Actual merchant account/prices/sandbox payment and live Meta interaction remain external acceptance gates.
+
+## Conversas visuais e ativação real da Meta
+- App Meta publicado pelo painel oficial; envio global habilitado e somente a automação do usuário automacao1 publicada.
+- Primeiros webhooks reais registrados como403; chave HMAC configurada para o produto Instagram e novo evento aguardado para validar.
+- Domínio, categoriaBusiness e plataformaWebsite confirmados pela API oficial; upload do ícone ainda sob investigação na Meta.
+- Editor SVG com mensagens, espera de resposta, condições, atrasos e fim; estado de conversa criptografado/durável e temporizadores no scheduler.
+- Revisor reproduziu respostas antigas avançando perguntas futuras; watermark causal, resposta imutável e recuperação de cursor corrigidos,90/90testes aprovados.
+
+- Correção HMAC confirmada em produção: comentário real persistido, execução concluída e mensagem aceita pela Meta com ID; segundo evento ficou unmatched. Confirmação de chegada no destinatário ainda pendente.
