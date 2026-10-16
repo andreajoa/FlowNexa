@@ -13,7 +13,7 @@ const db=identityDatabase();
 db.sqlite.exec(readFileSync(new URL('../migrations/0005_runtime.sql',import.meta.url),'utf8'));
 const sent=[],metaCalls=[],browserErrors=[],checks=[],apiErrors=[],browserRoutes=[];
 checks.push=function(...items){console.log('CHECK',items[0]);return Array.prototype.push.apply(this,items);};
-const env={DB:db,RESEND_API_KEY:'fake-browser-key',PUBLIC_BASE_URL:'https://flownex.online',APP_MODE:'production',PUBLIC_SIGNUP_ENABLED:'true',SESSION_SECRET:'fake-session-secret-for-browser',CRON_SECRET:'fake-browser-cron-secret-123456',MESSAGING_ENABLED:'true',TOKEN_ENCRYPTION_KEY:'a'.repeat(64),META_APP_ID:'123',META_APP_SECRET:'fake-meta-secret',META_REDIRECT_URI:'https://flownex.online/api/instagram/callback',META_VERIFY_TOKEN:'fake-verify'};
+const env={DB:db,RESEND_API_KEY:'fake-browser-key',PUBLIC_BASE_URL:'https://flownex.online',APP_MODE:'production',PUBLIC_SIGNUP_ENABLED:'true',SESSION_SECRET:'fake-session-secret-for-browser',CRON_SECRET:'fake-browser-cron-secret-123456',MESSAGING_ENABLED:'true',TOKEN_ENCRYPTION_KEY:'a'.repeat(64),META_APP_ID:'123',META_APP_SECRET:'fake-meta-secret',META_WEBHOOK_SECRET:'fake-parent-webhook-secret',META_REDIRECT_URI:'https://flownex.online/api/instagram/callback',META_VERIFY_TOKEN:'fake-verify'};
 env.RESEND_FETCH=async(url,options)=>{assert.equal(String(url),'https://api.resend.com/emails');sent.push(JSON.parse(options.body));return Response.json({id:'fake-browser-mail-'+sent.length});};
 env.META_FETCH=async(input,options={})=>{
  const url=new URL(input);metaCalls.push({path:url.pathname,method:options.method||'GET'});
@@ -58,7 +58,7 @@ try{
  await page.getByRole('button',{name:'Salvar e publicar',exact:true}).click();await page.getByText('Fluxo publicado.',{exact:false}).waitFor();assert.equal(db.sqlite.prepare('SELECT enabled FROM flows').get().enabled,1);checks.push('Publish validates provider configuration and enables persisted flow');
 
  const webhookBody=JSON.stringify({object:'instagram',entry:[{id:'12345',time:Math.floor(Date.now()/1000),changes:[{field:'comments',value:{id:'999',from:{id:'678'},media:{id:'555'},text:'QUERO',created_time:Math.floor(Date.now()/1000)}}]}]});
- const signature='sha256='+createHmac('sha256',env.META_APP_SECRET).update(webhookBody).digest('hex');
+ const signature='sha256='+createHmac('sha256',env.META_WEBHOOK_SECRET).update(webhookBody).digest('hex');
  const queued=await runtime.fetch(new Request('https://flownex.online/webhooks/instagram',{method:'POST',headers:{'content-type':'application/json','x-hub-signature-256':signature},body:webhookBody}),env);assert.equal(queued.status,200);
  const tickRequest=()=>new Request('https://flownex.online/api/internal/tick',{method:'POST',headers:{authorization:'Bearer '+env.CRON_SECRET}});
  assert.equal((await runtime.fetch(tickRequest(),env)).status,200);

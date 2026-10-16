@@ -22,7 +22,7 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/api/health'&&request.method==='GET'){
   if(!env.DB)return json({status:'degraded',database:false},503);
-  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET)});}catch{return json({status:'degraded',database:false},503);}
+  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET)});}catch{return json({status:'degraded',database:false},503);}
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
@@ -40,7 +40,7 @@ export default {async fetch(request,env,ctx={}){
   const reader=request.body?.getReader();if(!reader)return json({error:'invalid_payload'},400);let size=0,chunks=[];
   while(true){const r=await reader.read();if(r.done)break;size+=r.value.length;if(size>1048576){await reader.cancel();return json({error:'payload_too_large'},413);}chunks.push(r.value);}
   const body=new Uint8Array(size);let offset=0;for(const c of chunks){body.set(c,offset);offset+=c.length;}
-  if(!await verifySignature(body,request.headers.get('x-hub-signature-256'),env.META_APP_SECRET))return json({error:'invalid_signature'},403);
+  if(!await verifySignature(body,request.headers.get('x-hub-signature-256'),env.META_WEBHOOK_SECRET))return json({error:'invalid_signature'},403);
   if(!env.DB||!env.TOKEN_ENCRYPTION_KEY)return json({error:'database_unavailable'},503);
   let parsed;try{parsed=JSON.parse(new TextDecoder().decode(body));}catch{return json({error:'invalid_payload'},400);}
   try{const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processPending(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}

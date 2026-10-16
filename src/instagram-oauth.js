@@ -7,10 +7,7 @@ async function aesKey(key){if(!/^[a-f0-9]{64}$/i.test(key||""))throw Error("miss
 export async function encryptToken(token,key){const iv=crypto.getRandomValues(new Uint8Array(12));const data=await crypto.subtle.encrypt({name:"AES-GCM",iv},await aesKey(key),enc.encode(token));return "v1."+b64(iv)+"."+b64(data)}
 export async function decryptToken(stored,key){const [v,nonce,cipher]=String(stored).split(".");if(v!=="v1")throw Error("bad_token_format");const output=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(nonce)},await aesKey(key),unb64(cipher));return new TextDecoder().decode(output)}
 const hash=async v=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(v))),c=>c.toString(16).padStart(2,"0")).join("");
-export function subscriptionConfirmed(payload,configuredIds){
- const allowed=new Set(configuredIds.filter(id=>/^\d+$/.test(String(id||''))).map(String));
- return Array.isArray(payload?.data)&&payload.data.some(app=>allowed.has(String(app?.id))&&Array.isArray(app.subscribed_fields)&&['comments','messages'].every(field=>app.subscribed_fields.includes(field)));
-}
+export function subscriptionConfirmed(response,payload){return response.ok===true&&payload?.success===true;}
 export async function instagramOauth(request,env){
 if(!env.DB||!env.META_APP_ID||!env.META_APP_SECRET||!env.TOKEN_ENCRYPTION_KEY)return J({error:"meta_configuration_missing"},503);
 const url=new URL(request.url);
@@ -53,13 +50,9 @@ const lifetime=Number(tokenData.expires_in);if(!Number.isFinite(lifetime)||lifet
 const expire=Math.floor(Date.now()/1000)+lifetime;
 const subscriptionUrl=`https://graph.instagram.com/${env.META_API_VERSION||'v24.0'}/me/subscribed_apps`;
 const subscribed=await (env.META_FETCH||fetch)(subscriptionUrl,{method:'POST',headers:{authorization:'Bearer '+tokenData.access_token,'content-type':'application/json'},body:JSON.stringify({subscribed_fields:'comments,messages'}),signal:AbortSignal.timeout(15000)});
-const subscriptionResult=await subscribed.json();if(!subscribed.ok||subscriptionResult.success!==true)return J({error:'instagram_subscription_failed'},502);
-const check=await (env.META_FETCH||fetch)(subscriptionUrl,{headers:{authorization:'Bearer '+tokenData.access_token},signal:AbortSignal.timeout(15000)});
-const verified=await check.json();if(!check.ok||!subscriptionConfirmed(verified,[env.META_APP_ID,env.META_PARENT_APP_ID])){
- // Metadata only: never log tokens, provider payloads or authorization headers.
- console.warn('instagram_subscription_unconfirmed',JSON.stringify({status:check.status,apps:Array.isArray(verified?.data)?verified.data.slice(0,10).map(app=>({id:/^\d{1,30}$/.test(String(app?.id))?String(app.id):null,comments:Array.isArray(app?.subscribed_fields)&&app.subscribed_fields.includes('comments'),messages:Array.isArray(app?.subscribed_fields)&&app.subscribed_fields.includes('messages')})):[]}));
- return J({error:'instagram_subscription_unconfirmed'},502);
-}
+// The authenticated POST success is Meta's documented account-subscription confirmation.
+// GET subscription record IDs are a different namespace, not OAuth/parent app IDs.
+const subscriptionResult=await subscribed.json();if(!subscriptionConfirmed(subscribed,subscriptionResult))return J({error:'instagram_subscription_failed'},502);
 if(!await requireMembership(env.DB,user.id,stateRow.workspace_id,["owner","admin"]))return J({error:"forbidden"},403);
 const saved=await env.DB.prepare("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,encrypted_token,token_expires_at,status) VALUES (?,?,?,?,?,?,'connected') ON CONFLICT(ig_user_id) DO UPDATE SET username=excluded.username,encrypted_token=excluded.encrypted_token,token_expires_at=excluded.token_expires_at,status='connected' WHERE instagram_accounts.workspace_id=excluded.workspace_id").bind(id,stateRow.workspace_id,profile.username,igId,encrypted,expire).run();
 if(!saved.meta.changes)return J({error:"instagram_account_already_connected_to_other_workspace"},409);
