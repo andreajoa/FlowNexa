@@ -1,3 +1,4 @@
+import {validOutboundAction} from './conversation-graph.js';
 import {decryptToken} from './instagram-oauth.js';
 export function messagingReady(env){return env.MESSAGING_ENABLED==='true'&&Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET&&env.TOKEN_ENCRYPTION_KEY);}
 export async function metaRequest(env,account,path,{method='GET',body}={}){
@@ -15,20 +16,25 @@ export async function metaRequest(env,account,path,{method='GET',body}={}){
 }
 export async function sendAction(env,account,event,action){
  if(!messagingReady(env))throw Error('messaging_disabled');
+ if(!validOutboundAction(action))throw Error('unsupported_action');
  const age=Date.now()-event.at;if(age< -300000)throw Error('event_time_invalid');
  if(action.type==='private_reply'){
   if(event.kind!=='comment'||!/^\d+$/.test(event.comment_id||''))throw Error('invalid_comment');
   // Use the provider's comment timestamp, never webhook arrival time, for private replies.
   const comment=await metaRequest(env,account,`${event.comment_id}?fields=id,timestamp`);
   const time=Date.parse(comment.timestamp);if(!Number.isFinite(time)||Date.now()-time>7*86400000||time>Date.now()+300000)throw Error('private_reply_window_expired');
- }else if(action.type==='message'){
+ }else if(['message','image','video','buttons'].includes(action.type)){
   if(!['dm','story'].includes(event.kind)||!/^\d+$/.test(event.sender_id||''))throw Error('invalid_recipient');
   if(age>86400000)throw Error('message_window_expired');
  }else if(action.type!=='public_reply')throw Error('unsupported_action');
+ let message={text:action.text};
+ if(action.type==='message'&&action.quick_replies)message.quick_replies=action.quick_replies.map(({title,payload})=>({content_type:'text',title,payload}));
+ if(['image','video'].includes(action.type))message={attachment:{type:action.type,payload:{url:action.url}}};
+ if(action.type==='buttons')message={attachment:{type:'template',payload:{template_type:'generic',elements:[{title:action.text,buttons:action.buttons.map(button=>button.type==='web_url'?{type:'web_url',title:button.title,url:button.url}:{type:'postback',title:button.title,payload:button.payload})}]}}};
  let result;
  try{
   if(action.type==='public_reply')result=await metaRequest(env,account,`${event.comment_id}/replies`,{method:'POST',body:{message:action.text}});
-  else result=await metaRequest(env,account,`${account.ig_user_id}/messages`,{method:'POST',body:{recipient:action.type==='private_reply'?{comment_id:event.comment_id}:{id:event.sender_id},message:{text:action.text}}});
+  else result=await metaRequest(env,account,`${account.ig_user_id}/messages`,{method:'POST',body:{recipient:action.type==='private_reply'?{comment_id:event.comment_id}:{id:event.sender_id},message}});
  }catch(error){if(error.name==='TimeoutError'||error.name==='AbortError'||error instanceof TypeError)throw Error('delivery_unknown');throw error;}
  const id=result.message_id||result.id;if(typeof id!=='string'||!id.trim())throw Error('delivery_unknown');
  return id;
