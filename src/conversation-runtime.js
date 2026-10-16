@@ -2,7 +2,7 @@ import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {sha} from './identity.js';
 import {billingAccess} from './billing.js';
 import {sendAction,messagingReady} from './meta-client.js';
-import {validateGraph,conditionMatches} from './conversation-graph.js';
+import {validateGraph,conditionMatches,switchTarget} from './conversation-graph.js';
 const active="('running','waiting_reply','delayed')";
 async function lock(env,id){const lease=crypto.randomUUID(),now=Date.now();const row=await env.DB.prepare(`UPDATE conversation_sessions SET lease_id=?,lease_until=? WHERE id=? AND status IN ${active} AND (lease_until IS NULL OR lease_until<?) RETURNING *`).bind(lease,now+60000,id,now).first();if(!row){const error=Error('conversation_busy');error.retryable=true;throw error;}return row;}
 async function save(env,row,state,changes={}){
@@ -29,20 +29,21 @@ async function drive(env,row,state,deadline){
    await save(env,row,state,{node_id:node.next,status:'running',step_index:row.step_index+1});continue;
   }
   if(node.type==='end'){await save(env,row,state,{status:'completed',error:null});return;}
-  if(node.type==='condition'){await save(env,row,state,{node_id:conditionMatches(node,state.replyText)?node.yes:node.no,step_index:row.step_index+1});continue;}
+  if(node.type==='condition'){await save(env,row,state,{node_id:conditionMatches(node,state.replyText,state.replyPayload)?node.yes:node.no,step_index:row.step_index+1});continue;}
+  if(node.type==='switch'){await save(env,row,state,{node_id:switchTarget(node,state.replyText,state.replyPayload),step_index:row.step_index+1});continue;}
   if(node.type==='wait_reply'){
    state.waitingSince=state.afterMessage?state.lastOutboundAt:Date.now();state.waitingInboundAt=state.afterMessage?state.lastMessageInboundAt:(state.inbound?.at||0);state.afterMessage=false;
    // A reply may already be durable while recovering an accepted message's cursor write.
    // Select its original encrypted event, not a later message that merely refreshed the window.
    const pending=await env.DB.prepare('SELECT e.encrypted_event FROM conversation_inbound i JOIN automation_events e ON e.id=i.event_id WHERE i.conversation_id=? AND e.event_at>=? AND e.event_at>? ORDER BY i.received_at,i.rowid LIMIT 1').bind(row.id,state.waitingSince,state.waitingInboundAt).first();
-   if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
+   if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;state.replyPayload=reply.payload||null;await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
    await save(env,row,state,{status:'waiting_reply',due_at:state.waitingSince+node.timeout_seconds*1000});return;
   }
   if(node.type==='delay'){state.afterMessage=false;await save(env,row,state,{status:'delayed',due_at:Date.now()+node.seconds*1000});return;}
-  if(node.type!=='message'){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
+  if(!['message','image','video','buttons'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   let event,action;
   if(state.origin.kind==='comment'&&!state.sentFirst){event=state.origin;action={type:'private_reply',text:node.text};}
-  else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action={type:'message',text:node.text};}
+  else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:node.text,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:['image','video'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
   action.source_at=event.at;
   const effect=await sha('conversation:'+row.id+':'+row.step_index),jobId=await sha('conversation-job:'+effect);
   await env.DB.prepare('INSERT OR IGNORE INTO automation_jobs(id,event_id,account_id,workspace_id,flow_id,flow_version,action_index,action_type,effect_key,encrypted_action) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(jobId,row.origin_event_id,row.account_id,row.workspace_id,row.flow_id,row.flow_version,1000+row.step_index,action.type,effect,await encryptToken(JSON.stringify(action),env.TOKEN_ENCRYPTION_KEY)).run();
@@ -75,7 +76,7 @@ export async function startConversation(env,account,flow,event,eventId){
  const c=typeof flow.configuration==='string'?JSON.parse(flow.configuration):flow.configuration;
  if(!validateGraph(c.graph).ok)return'invalid_graph';if(!event.sender_id)return'identity_unavailable';
  const prior=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(eventId).first();if(prior)return'conversation_started';
- const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',sentFirst:false};
+ const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,sentFirst:false};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,await sha(event.sender_id),eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
  return inserted.meta.changes?'conversation_started':'conversation_already_active';
 }
@@ -94,7 +95,7 @@ export async function resumeConversation(env,account,event,eventId){
   const node=state.graph.nodes.find(n=>n.id===row.node_id),advance=row.status==='waiting_reply'&&newer&&event.at>=(state.waitingSince||row.created_at)&&event.at>(state.waitingInboundAt||0);
   // Freeze the answer consumed by this branch. Later DMs can extend the user window,
   // but cannot replace the already selected answer while the graph cursor is running.
-  if(advance)state.replyText=event.text;
+  if(advance){state.replyText=event.text;state.replyPayload=event.payload||null;}
   // Cursor and inbound event receipt commit together: an interrupted callback cannot branch twice.
   const nextNode=advance?node.on_reply:row.node_id,nextStatus=advance?'running':row.status,nextStep=row.step_index+(advance?1:0);
   const encrypted=await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY);

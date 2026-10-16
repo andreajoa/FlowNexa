@@ -49,7 +49,7 @@ if(existing&&existing.workspace_id!==stateRow.workspace_id)return J({error:"inst
 const lifetime=Number(tokenData.expires_in);if(!Number.isFinite(lifetime)||lifetime<3600)return J({error:"invalid_token_expiry"},502);
 const expire=Math.floor(Date.now()/1000)+lifetime;
 const subscriptionUrl=`https://graph.instagram.com/${env.META_API_VERSION||'v24.0'}/me/subscribed_apps`;
-const subscribed=await (env.META_FETCH||fetch)(subscriptionUrl,{method:'POST',headers:{authorization:'Bearer '+tokenData.access_token,'content-type':'application/json'},body:JSON.stringify({subscribed_fields:'comments,messages'}),signal:AbortSignal.timeout(15000)});
+const subscribed=await (env.META_FETCH||fetch)(subscriptionUrl,{method:'POST',headers:{authorization:'Bearer '+tokenData.access_token,'content-type':'application/json'},body:JSON.stringify({subscribed_fields:'comments,messages,messaging_postbacks'}),signal:AbortSignal.timeout(15000)});
 // The authenticated POST success is Meta's documented account-subscription confirmation.
 // GET subscription record IDs are a different namespace, not OAuth/parent app IDs.
 const subscriptionResult=await subscribed.json();if(!subscriptionConfirmed(subscribed,subscriptionResult))return J({error:'instagram_subscription_failed'},502);

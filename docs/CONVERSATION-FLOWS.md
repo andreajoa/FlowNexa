@@ -18,3 +18,15 @@ Verificação local:91testes automatizados, revisão independente das falhas de 
 Atualização de navegação: menu lateral no desktop e navegação horizontal no celular, com acessos a automações, modelos com nós, Instagram, atividade e assinatura. Automações salvas aparecem antes da configuração inicial, com publicadas primeiro. Fluxos simples de uma única mensagem privada/Direct podem abrir a mensagem original no mapa por “Abrir nós”; abrir não modifica o banco. Salvar converte a configuração em grafo e pausa até publicar novamente.
 
 Seis modelos editáveis: interesse, qualificação, catálogo, agendamento, material gratuito e atendimento de pedidos. Links exigem HTTPS sem credenciais. Mensagens, gatilhos e destinos podem ser personalizados. Nós movem por alça com mouse/toque ou setas; saídas conectam por arraste até outro nó ou pelos seletores acessíveis. Conexões para o próprio nó e ciclos são rejeitadas no mapa; o servidor continua validando a configuração completa antes de salvar/publicar.
+
+## Conteúdo e bifurcações
+
+O botão Criar do zero abre o mapa. O editor simples identifica a limitação e oferece Continuar no editor de nós, reutilizando as mensagens preenchidas compatíveis sem gravação automática. Respostas públicas não são convertidas silenciosamente; comentários continuam limitados a uma resposta privada inicial.
+
+Paleta de nós: mensagem e links em texto; imagem por URL HTTPS pública; vídeo por URL HTTPS pública; cartão com até três botões de abrir URL ou responder; pergunta com até13respostas rápidas; condição Se/então; seleção de2a10caminhos e saída padrão; aguardar resposta; esperar tempo; encerrar. O atalho Pergunta com opções cria pergunta+espera+bifurcação conectadas. Vídeo com link cria vídeo seguido de cartão clicável, com envios duráveis separados. Não há upload de mídia nesta versão: use o link direto de um arquivo acessível à Meta, não a URL de uma página de vídeo.
+
+O modelo Funil com botões, imagem e vídeo vem com recepção→espera→menu→espera→bifurcação→catálogo/vídeo/link, incluindo outra resposta e tempo esgotado. Todas as mensagens, títulos, respostas e destinos são editáveis. Cartões usam um elemento de template genérico, título até80caracteres e botões com título até20; para texto maior, use uma mensagem antes. Respostas rápidas funcionam no aplicativo do Instagram, não no desktop.
+
+Cliques de resposta e respostas rápidas conservam o identificador da opção separado do título. O runtime usa a resposta imutável para decidir o caminho; eventos próprios são ignorados e notificações repetidas não reenviam. Um clique em URL não é interpretado como resposta nem abre janela de mensagens. O OAuth e a conta já conectada inscrevem comments,messages,messaging_postbacks. Também habilite messaging_postbacks no painel de webhooks do produto Instagram.
+
+Referência primária dos formatos e eventos: [coleção oficial da Meta para Instagram Login](https://github.com/fbsamples/messenger-platform-samples/blob/main/postman/instagram-platform-api.postman_collection.json). Os testes usam provedores simulados; a confirmação de recebimento real dos novos formatos é uma etapa distinta da validação do código.
