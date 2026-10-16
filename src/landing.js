@@ -163,6 +163,66 @@ export function landingPage(){return `<!doctype html><html lang="pt-BR"><head><m
 .new-footer{background:#130d26;color:#f7f3ff;padding:78px 30px 27px;position:relative;overflow:hidden}.new-footer:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#ae70f8,#f7b0e8,#6b44e4)}.footer-inner{max-width:1190px;margin:auto;position:relative}.footer-grid{display:grid;grid-template-columns:1.75fr repeat(3,1fr);gap:50px}.footer-logo{display:flex;align-items:center;gap:9px;font-size:30px;font-weight:900;letter-spacing:-.05em}.footer-logo b{color:#b889ff}.footer-brand p{max-width:300px;font-size:15px;line-height:1.8;color:#b7afc9;margin:19px 0}.footer-status{display:inline-block;border:1px solid #524268;border-radius:25px;color:#c5b5e0;font-size:11px;padding:9px 13px;line-height:1.4}.footer-column{display:flex;flex-direction:column;gap:14px}.footer-column strong{font-size:14px;margin-bottom:9px;color:#fff}.footer-column a{font-size:14px;color:#b6aeca;transition:color .2s}.footer-column a:hover{color:#e1bcff}.footer-bottom{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:17px;border-top:1px solid #3a2c51;margin-top:63px;padding-top:26px;color:#9d93b4;font-size:12px}.footer-bottom a{color:#d1b4fe}
 @media(max-width:850px){.footer-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:35px}.footer-brand{grid-column:1/-1}.modern-links{gap:12px}.mega-panel{left:8px;right:8px}.mega-gallery{gap:8px}.mega-feature img{height:85px}}
 @media(max-width:600px){.modern-nav{flex-wrap:wrap;padding:12px;gap:10px}.modern-links{flex:1;justify-content:flex-end;flex-wrap:wrap;gap:11px;font-size:12px}.modern-links .cta{padding:10px 12px}.mega-panel{padding:16px;max-height:70vh;overflow-y:auto}.mega-gallery{grid-template-columns:1fr}.mega-feature{display:grid;grid-template-columns:95px 1fr;align-items:center;padding:8px;gap:0 12px}.mega-feature img{width:95px;height:72px;grid-row:span 2}.mega-feature strong,.mega-feature small{padding:0}.mega-heading strong{font-size:20px}.mega-bottom{flex-wrap:wrap;gap:12px}.footer-grid{gap:30px}.new-footer{padding:60px 22px 27px}}
+
+/* Mobile-first layout safeguards. Motion remains active at all viewport widths. */
+html{scroll-behavior:smooth;scroll-padding-top:18px}
+body{width:100%;overflow-x:clip}
+img,svg,video{max-width:100%}
+:where(.shell,.hero,.hero-visual,.copy,.features-layout,.features-copy,.audience-detail,.faq-panel,.new-footer,.footer-inner){min-width:0}
+:where(.proof-window,.creator-lane,.blog-marquee-window){max-width:100%;overflow:hidden}
+.proof-track,.creator-track,.blog-marquee-track{animation-play-state:running}
+@media(max-width:780px){
+ .shell{padding:14px 14px 0}
+ .navbar.modern-nav{width:100%;max-width:100%;margin-bottom:25px;border-radius:15px;padding:12px;gap:12px;flex-wrap:wrap}
+ .brand-logo{gap:5px;font-size:22px}.brand-logo img{width:31px;height:31px}
+ .modern-links{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;width:100%;gap:8px 17px;font-size:13px}
+ .modern-links .cta{padding:10px 14px;font-size:12px}
+ .modern-links .nav-mega{position:static}
+ .mega-panel{left:0;right:0;top:100%;width:100%;padding:15px;max-height:75vh;overflow-y:auto}
+ .mega-gallery{grid-template-columns:1fr}.mega-feature{display:grid;grid-template-columns:88px 1fr;gap:3px 12px}
+ .mega-feature img{width:88px;height:74px;grid-row:span 2}
+ .mega-feature strong,.mega-feature small{padding:0}
+ .hero{display:flex;flex-direction:column;min-height:0;align-items:stretch;gap:0}
+ .hero .copy{width:100%;padding:18px 4px 15px}
+ .hero .copy h1{font-size:clamp(37px,9.3vw,56px);line-height:1.11}
+ .hero .copy p{font-size:16px;margin-top:21px}
+ .hero .highlight{max-width:100%;padding:2px 12px 6px}
+ .hero .micro{max-width:100%;flex-wrap:wrap;gap:5px;font-size:12px;padding:10px 12px;margin-bottom:21px}
+ .hero-visual{width:100%;max-width:100%;height:590px;overflow:visible}
+ .hero-visual .halo{max-width:100%;right:0;left:0;margin:auto}
+ .hero-visual .phone{flex:none}
+ .hero-visual .live{right:0}
+ .hero-visual .preview{right:0}
+ .hero-visual .preview.two{right:0}
+ .features-layout{grid-template-columns:minmax(0,1fr)}
+ .features-copy{width:100%}
+ .proof-window,.creator-lane,.blog-marquee-window{touch-action:pan-y}
+ .proof-track{animation:proof-run 38s linear infinite}
+ .creator-track{animation:creator-scroll 58s linear infinite}
+ .creator-track.reverse{animation-direction:reverse;animation-duration:65s}
+ .creator-track.third{animation-duration:53s}
+ .blog-marquee-track{animation:blog-glide 60s linear infinite}
+ .footer-bottom{gap:12px}
+}
+@media(max-width:440px){
+ .hero-visual{height:525px}
+ .hero-visual .phone{transform:scale(.82);transform-origin:top center;margin-top:15px}
+ .hero-visual .live{top:95px;right:0;font-size:11px;padding:9px}
+ .hero-visual .preview{bottom:115px;right:-6px;width:112px}
+ .hero-visual .preview.two{bottom:240px;right:-6px}
+ .hero-visual .preview .art{height:76px}
+ .hero-visual .dots{bottom:20px}
+ .evidence-grid,.plans-grid,.reel-compare-grid{width:100%}
+ .blog-marquee-card{width:280px}
+ .faq-copy{padding:26px 18px 8px}
+ .faq-copy h2{font-size:32px}
+ .footer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){
+ html{scroll-behavior:auto}
+ .proof-track,.creator-track,.blog-marquee-track{animation:none!important}
+ .proof-window,.creator-lane,.blog-marquee-window{overflow-x:auto;touch-action:pan-x pan-y;mask-image:none}
+}
 </style></head><body id="topo"><div class="shell"><nav class="navbar modern-nav" aria-label="Navegação principal"><a class="logo brand-logo" href="/" aria-label="FlowNexa, início"><img src="/assets/flownexa-mark.svg" width="39" height="39" alt=""><span class="brand-word">Flow<b>Nexa</b></span></a><div class="links modern-links">
 <details class="nav-mega"><summary>Explorar <span aria-hidden="true">⌄</span></summary><div class="mega-panel"><div class="mega-heading"><span>DESCUBRA O FLOWNEXA</span><strong>Conexões que viram conversas.</strong></div><div class="mega-gallery"><a href="#recursos-detalhes" class="mega-feature"><img src="/assets/menu-chat.svg" alt=""><strong>Automações de Direct</strong><small>Palavras-chave, mensagens e fluxos.</small></a><a href="#publicos" class="mega-feature"><img src="/assets/menu-team.svg" alt=""><strong>Para criadores e equipes</strong><small>Organize cada perfil e campanha.</small></a><a href="#beneficios" class="mega-feature"><img src="/assets/menu-insights.svg" alt=""><strong>Como funciona</strong><small>Veja as demonstrações da plataforma.</small></a></div><div class="mega-bottom"><a href="#precos">Planos e preços →</a><a href="#guias">Guias →</a><a href="#faq">Perguntas frequentes →</a></div></div></details>
 <a href="#precos">Preços</a><a href="#faq">FAQ</a><a href="/app">Entrar</a><a class="cta" href="/app">Comece grátis →</a></div></nav>
