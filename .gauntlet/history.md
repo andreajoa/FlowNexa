@@ -16,3 +16,10 @@ Initial diagnosis: real public root works; backend configuration path returns503
 - Actual production registration returned202 and Resend accepted verification email sent solely to its official delivery-test recipient. Unverified login403 and hashed token persistence confirmed. Test tenant removed; inbox delivery was not independently confirmed.
 - First actual scheduler observation exposed Workers rejecting redirect:error. Changed to manual, still rejects redirects/non2xx;3 tests passed. Dedicated worker redeployed, real cron outcomeok with processed0 while messaging disabled.
 - Meta creation still awaits user's password confirmation in the native provider browser dialog. No real account connected or Instagram message sent. Do not enable messaging or describe Instagram as operational yet.
+
+## Beginner experience and embedded subscriptions
+- Replaced prototype-only signup entrance with actual registration routing; preserved public layout.
+- Added ten supported ready templates and beginner setup progression; FAQ/DM/story models permit repeat questions instead of permanently suppressing later replies.
+- Fixed100-event webhook rejection to support1000-update envelopes with durable bounded batching and retry-safe partial persistence.
+- Added recurring Stripe Embedded Checkout, canonical webhook-driven status, Customer Portal and opt-in paid execution enforcement. Corrected UI mode to embedded_page based on version-pinned official SDK.
+- Actual merchant account/prices/sandbox payment and live Meta interaction remain external acceptance gates.

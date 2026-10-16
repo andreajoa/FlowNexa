@@ -1,3 +1,4 @@
+import {billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,respond as J,sameOrigin,payload} from './identity.js';
 import {validateFlow,matchFlow} from './flow-runtime.js';
 import {metaRequest,messagingReady} from './meta-client.js';
@@ -37,6 +38,7 @@ export async function runtimeApi(request,env){
    }
    if(request.method==='POST'&&['publish','pause'].includes(f[2])){
     if(f[2]==='publish'){
+     if(!await billingAccess(env,flow.workspace_id))return J({error:'billing_subscription_required'},402);
      if(!messagingReady(env))return J({error:'messaging_not_configured'},503);
      const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(flow.account_id).first();if(!account||account.status!=='connected'||account.token_expires_at<Date.now()/1000)return J({error:'account_reconnect_required'},409);
      const valid=validateFlow(flow.trigger_type,flow.scope,JSON.parse(flow.configuration));if(!valid.ok)return J({error:valid.error},400);
