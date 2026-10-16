@@ -1,5 +1,5 @@
 # Current state
 
-Implementation and local verification complete for access, flow editing, queue, sender integration and lifecycle. Public main45fa5eb preserved. Real SQLite/provider-boundary suite42passed. Browser integrated acceptance in progress. Live release is for disabled-messaging validation, not a production-readiness claim.
+Private application published at https://flownex.online/app in the dedicated Vercel project. Health200; original public landing byte-identical. D1 migrations applied.42 tests and12 Chromium workflow paths passed. Production registration/Resend acceptance and unverified-login rejection verified; test tenant cleaned. Dedicated Cloudflare minute scheduler actual invocationoutcomeok, authenticated application tick200.
 
-External dependency: Meta app creation requires browser password confirmation by user, then appcredentials, callback config and professional-account authorization/test. MESSAGING_ENABLED remainsfalse. Scheduler deployed; application tick pending release.
+External dependency: Meta app creation is waiting at the provider password confirmation dialog. The owner must complete this in the browser. Then obtain app credentials, configure callbacks, authorize a professional Instagram account and complete a real signed-interaction/provider-ID test. MESSAGING_ENABLED remainsfalse. The product is not yet verified for live Instagram automation.

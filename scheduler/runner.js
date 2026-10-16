@@ -6,7 +6,7 @@ export async function tick(env, fetcher = fetch) {
     method: 'POST',
     headers: { authorization: 'Bearer ' + env.CRON_SECRET, 'content-type': 'application/json' },
     body: '{}',
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(45000)
   });
   if (!response.ok) throw new Error('scheduler_tick_http_' + response.status);
