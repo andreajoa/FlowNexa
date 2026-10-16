@@ -1,3 +1,4 @@
+import {startConversation,resumeConversation} from './conversation-runtime.js';
 import {billingAccess} from './billing.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {sha} from './identity.js';
@@ -27,6 +28,8 @@ async function processEvent(env,row,deadline){
  const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();
  if(!account||account.status!=='connected')return 'cancelled';
  if(!await billingAccess(env,account.workspace_id)){await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='billing_subscription_required',completed_at=? WHERE event_id=? AND status='pending'").bind(Date.now(),row.id).run();return 'cancelled';}
+ const started=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(row.id).first();if(started)return 'conversation_started';
+ if(await resumeConversation(env,account,event,row.id))return 'conversation_resumed';
  let jobs=await env.DB.prepare('SELECT * FROM automation_jobs WHERE event_id=? ORDER BY action_index').bind(row.id).all();
  if(!jobs.results.length){
   const flows=await env.DB.prepare('SELECT * FROM flows WHERE account_id=? AND enabled=1 ORDER BY created_at,id').bind(account.id).all();
@@ -38,6 +41,7 @@ async function processEvent(env,row,deadline){
    await env.DB.prepare('INSERT OR IGNORE INTO automation_contacts(account_id,flow_id,recipient_hash,event_id) VALUES (?,?,?,?)').bind(account.id,flow.id,recipient,row.id).run();
    const contact=await env.DB.prepare('SELECT event_id FROM automation_contacts WHERE account_id=? AND flow_id=? AND recipient_hash=?').bind(account.id,flow.id,recipient).first();if(contact.event_id!==row.id)return 'contact_already_processed';
   }
+  if(match.configuration.graph)return startConversation(env,account,flow,event,row.id);
   const statements=[];
   for(let i=0;i<match.actions.length;i++){
    const action=match.actions[i];const effect=await sha(`${account.id}:${event.kind==='comment'?event.comment_id:event.key}:${action.type}:${event.kind==='comment'?'':i}`);
@@ -66,6 +70,7 @@ async function processEvent(env,row,deadline){
    const id=await sendAction(env,current,event,action);
    try{await env.DB.prepare("UPDATE automation_jobs SET status='accepted',provider_id=?,completed_at=?,error=NULL WHERE id=?").bind(id,Date.now(),job.id).run();}catch{throw Error('delivery_unknown');}
   }catch(error){
+   if(error.deferred){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='processing_deferred' WHERE id=?").bind(job.id).run();throw error;}
    if(error.retryable&&row.attempts<6){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='meta_rate_limited' WHERE id=?").bind(job.id).run();throw error;}
    const uncertain=error.message==='delivery_unknown';
    const allowed=['delivery_unknown','messaging_disabled','account_reconnect_required','private_reply_window_expired','message_window_expired','event_time_invalid','invalid_comment','invalid_recipient','unsupported_action','meta_request_rejected','meta_invalid_response'];
@@ -77,9 +82,10 @@ async function processEvent(env,row,deadline){
  if(unknown||failed)await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='previous_action_failed',completed_at=? WHERE event_id=? AND status='pending'").bind(Date.now(),row.id).run();
  return unknown?'unknown':failed?'failed':'completed';
 }
-export async function processPending(env,limit=10){
+export async function processPending(env,limit=10,executionDeadline){
  if(!env.DB||!messagingReady(env))return{processed:0,disabled:true};
- let processed=0;const deadline=Date.now()+35000;
+ let processed=0;const deadline=executionDeadline||env.RUNTIME_DEADLINE_MS||Date.now()+35000;
+ env={...env,RUNTIME_DEADLINE_MS:deadline};
  for(let i=0;i<Math.min(limit,20)&&Date.now()<deadline;i++){
   const now=Date.now(),lease=crypto.randomUUID();
   const row=await env.DB.prepare("UPDATE automation_events SET status='processing',lease_id=?,lease_until=?,attempts=attempts+1 WHERE id=(SELECT id FROM automation_events WHERE (status='pending' AND due_at<=?) OR (status='processing' AND lease_until<?) ORDER BY due_at LIMIT 1) RETURNING *").bind(lease,now+60000,now,now).first();if(!row)break;

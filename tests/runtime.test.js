@@ -3,7 +3,7 @@ import {identityDatabase} from './identity-helper.js';
 import runtime from '../src/index.js';import {runtimeApi} from '../src/runtime-api.js';import {sha} from '../src/identity.js';
 import {encryptToken,instagramOauth} from '../src/instagram-oauth.js';import {enqueueWebhook,processPending} from '../src/automation-engine.js';import {normalizeWebhook} from '../src/flow-runtime.js';
 async function setup(action='message'){
- const db=identityDatabase();db.sqlite.exec(readFileSync(new URL('../migrations/0005_runtime.sql',import.meta.url),'utf8'));
+ const db=identityDatabase();db.sqlite.exec(readFileSync(new URL('../migrations/0005_runtime.sql',import.meta.url),'utf8'));db.sqlite.exec(readFileSync(new URL('../migrations/0008_conversations.sql',import.meta.url),'utf8'));
  db.sqlite.exec("INSERT INTO users(id,email,password_hash,email_verified_at) VALUES('u','owner@example.test','unused',1),('v','other@example.test','unused',1); INSERT INTO workspaces(id,name,owner_id) VALUES('w','Main','u'),('other','Other','v'); INSERT INTO memberships VALUES('w','u','owner'),('other','v','owner');");
  await db.prepare('INSERT INTO sessions VALUES (?,?,?)').bind(await sha('session'),'u',Math.floor(Date.now()/1000)+3600).run();
  const env={DB:db,TOKEN_ENCRYPTION_KEY:'a'.repeat(64),MESSAGING_ENABLED:'true',META_APP_ID:'123',META_APP_SECRET:'secret',META_WEBHOOK_SECRET:'parent-webhook-secret',META_REDIRECT_URI:'https://flownex.online/api/instagram/callback'};
@@ -68,7 +68,7 @@ test('failed or malformed Meta subscription responses never persist a newly conn
   try{const start=await instagramOauth(req('/api/instagram/connect?workspace=w'),env),state=new URL((await start.json()).authorization_url).searchParams.get('state');assert.equal((await instagramOauth(req('/api/instagram/callback?state='+state+'&code=code'),env)).status,502);assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM instagram_accounts WHERE ig_user_id='500'").get().n,0);}finally{db.close();}
  }
 });
-test('webhook requires the separate signing secret and rejects the OAuth secret, missing key and tampered bytes',async()=>{
+test('webhook requires its configured signing secret and rejects a different key, missing key and tampered bytes',async()=>{
  const{db,env}=await setup();const bytes=JSON.stringify(dm());const sign=async(secret,body)=>{const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return 'sha256='+Buffer.from(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(body))).toString('hex');};
  try{for(const [secret,body,settings,expected] of [[env.META_WEBHOOK_SECRET,bytes,env,200],[env.META_APP_SECRET,bytes,env,403],[env.META_WEBHOOK_SECRET,bytes+' ',env,403],[env.META_WEBHOOK_SECRET,bytes,{...env,META_WEBHOOK_SECRET:undefined},403]]){const response=await runtime.fetch(new Request('https://flownex.online/webhooks/instagram',{method:'POST',headers:{'x-hub-signature-256':await sign(secret,bytes)},body}),settings);assert.equal(response.status,expected);}assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM automation_events').get().n,1);}finally{db.close();}
 });
