@@ -26,7 +26,7 @@ function boot() {
   async function busy(button,task) { const old=button.textContent; button.disabled=true; button.textContent='Aguarde…'; try { await task(); } catch(e) { notice(e.message,'error'); } finally { button.disabled=false; button.textContent=old; } }
   function button(text, task, cls='') { const b=node('button',text,cls); b.type='button'; b.addEventListener('click',()=>busy(b,task)); return b; }
   function field(parent,text,type='text',value='',name='') { const l=node('label',text); const input=node(type==='textarea'?'textarea':'input'); if(type!=='textarea')input.type=type; input.value=value; if(name) input.name=name; l.append(input);parent.append(l); return input; }
-  function select(parent,text,options,value) { const l=node('label',text), s=node('select'); for(const [id,label] of options){const o=node('option',label);o.value=id;s.append(o);}s.value=value||'';l.append(s);parent.append(l);return s; }
+  function select(parent,text,options,value) { const l=node('label',text), s=node('select');s.setAttribute('aria-label',text); for(const [id,label] of options){const o=node('option',label);o.value=id;s.append(o);}s.value=value||'';l.append(s);parent.append(l);return s; }
   function authView(mode='login',token='') {
     const host=$('auth');host.replaceChildren();host.hidden=false;
     const titles={login:'Entre na sua conta',register:'Crie sua conta FlowNexa',forgot:'Recupere sua senha',resend:'Confirme seu e-mail',verify:'Confirme seu e-mail',reset:'Escolha uma nova senha'};
