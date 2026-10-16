@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {conversationTemplate,previewConversation,publicationConflicts} from '../src/app-client.js';
+import {CONVERSATION_TEMPLATES,conversationTemplate,previewConversation,publicationConflicts} from '../src/app-client.js';
 import {validateGraph} from '../src/conversation-graph.js';
 import {validateFlow} from '../src/flow-runtime.js';
 test('ready conversation uses supported persistent graph, independent replies and finite branching',()=>{
@@ -20,4 +20,8 @@ test('graph publication guard blocks broad/overlapping existing flows without bl
  assert.equal(publicationConflicts(candidate,[{...broad,trigger_type:'comment_keyword',configuration:JSON.stringify({keywords:['quero preço']})}]).length,1);
  assert.deepEqual(publicationConflicts(candidate,[{...broad,enabled:0},{...broad,id:'new'},{...broad,account_id:'other'},{...broad,trigger_type:'dm_keyword',configuration:{keywords:['QUERO']}}]),[]);
  assert.deepEqual(publicationConflicts({...candidate,trigger_type:'dm_keyword'},[{...broad,trigger_type:'story_reply'}]),[]);
+});
+
+test('all six node presets validate, personalize safely and keep catalog independent',()=>{
+ assert.equal(CONVERSATION_TEMPLATES.length,6);for(const template of CONVERSATION_TEMPLATES){const flow=conversationTemplate(template.id,{link:'https://example.test/catalog'});assert.equal(validateGraph(flow.configuration.graph).ok,true,template.id);assert.equal(validateFlow(flow.trigger_type,flow.scope,flow.configuration).ok,true,template.id);assert.ok(!JSON.stringify(flow).includes('{link}'));const other=conversationTemplate(template.id,{link:'https://example.test/other'});flow.configuration.graph.nodes[0].text='Edited';flow.configuration.keywords.push('CHANGED');assert.notEqual(other.configuration.graph.nodes[0].text,'Edited');assert.ok(!template.keywords.includes('CHANGED'));if(template.fields.includes('link')){for(const link of ['', 'http://example.test','javascript:alert(1)','https://user:secret@example.test'])assert.throws(()=>conversationTemplate(template.id,{link}));}}
 });

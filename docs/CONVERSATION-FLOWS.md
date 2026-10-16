@@ -13,3 +13,8 @@ Regras de mensagens: comentários permitem a primeira resposta privada no prazo 
 Salvar e simular não enviam mensagens. Publicar habilita eventos futuros. O mapa de prévia é uma simulação determinística, não comprovação de entrega. O histórico distingue aceitação pela Meta e resultado sem confirmação.
 
 Verificação local:91testes automatizados, revisão independente das falhas de causalidade e19caminhos Chromium com banco/runtime reais e provedores externos simulados. Nenhum desses testes substitui um comentário/Direct real com confirmação no destinatário. Migração0008 aplicada na base dedicada antes do deploy.
+
+
+Atualização de navegação: menu lateral no desktop e navegação horizontal no celular, com acessos a automações, modelos com nós, Instagram, atividade e assinatura. Automações salvas aparecem antes da configuração inicial, com publicadas primeiro. Fluxos simples de uma única mensagem privada/Direct podem abrir a mensagem original no mapa por “Abrir nós”; abrir não modifica o banco. Salvar converte a configuração em grafo e pausa até publicar novamente.
+
+Seis modelos editáveis: interesse, qualificação, catálogo, agendamento, material gratuito e atendimento de pedidos. Links exigem HTTPS sem credenciais. Mensagens, gatilhos e destinos podem ser personalizados. Nós movem por alça com mouse/toque ou setas; saídas conectam por arraste até outro nó ou pelos seletores acessíveis. Conexões para o próprio nó e ciclos são rejeitadas no mapa; o servidor continua validando a configuração completa antes de salvar/publicar.
