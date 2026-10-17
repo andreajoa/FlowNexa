@@ -49,6 +49,14 @@ async function drive(env,row,state,deadline){
   if(node.type==='delay'){state.afterMessage=false;await save(env,row,state,{status:'delayed',due_at:Date.now()+node.seconds*1000});return;}
   if(!['message','image','video','buttons'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   let event,action;
+  // A returning contact who already asked something specific gets the answer, not the generic greeting again.
+  if(node.id===state.graph.start&&state.isReturning&&!state.skippedWelcome&&state.origin.kind!=='comment'&&(state.replyText||state.replyPayload)){
+   const waitNode=nodes.get(node.next),router=waitNode&&nodes.get(waitNode.on_reply);
+   if(waitNode?.type==='wait_reply'&&router?.type==='switch'){
+    const target=switchTarget(router,state.replyText,state.replyPayload);
+    if(target!==router.default){state.skippedWelcome=true;await save(env,row,state,{node_id:target,step_index:row.step_index+1});continue;}
+   }
+  }
   let textMsg=node.text;
   if(node.id==='welcome'){
    if(state.isReturning&&node.text_returning)textMsg=node.text_returning;

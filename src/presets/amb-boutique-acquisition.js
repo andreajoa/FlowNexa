@@ -1,10 +1,10 @@
-// Preset de automação cutting-edge para AMB BOUTIQUE (Instagram @ambb.outique)
-// 100% in American English.
-// Important Policy: AMB Boutique is an exclusively online boutique.
-// "San Diego" is never mentioned in general copy as physical store. If asked for delivery to San Diego
-// or California, it confirms: YES, we deliver nationwide across the US (including San Diego, CA)!
-// Sourcing / supplier names (e.g. AliExpress) are strictly banned from customer copy.
-// Every inquiry about products (midi dresses, shoes, tracking, VIP perks) has immediate proofs, links, and buttons.
+// Preset de automação para AMB BOUTIQUE (Instagram @ambb.outique)
+// 100% American English. Persona: "Jasmin L.", the AMB virtual stylist.
+// Voice: warm, gracious, elegant and gently persuasive — never blunt. The audience is women.
+// Jasmin always presents herself as a *virtual* stylist (honest about being automated).
+// If a client says Jasmin is the name of her daughter, sister, mom, aunt, grandma, friend...
+// Jasmin reacts sweetly and gracefully guides the conversation back to shopping.
+// Policies: 100% online boutique; never name suppliers; deliver to all 50 U.S. states.
 
 export function buildAmbBoutiqueMaster() {
   const site = 'https://www.ambboutique.online';
@@ -15,12 +15,12 @@ export function buildAmbBoutiqueMaster() {
   });
 
   const nodes = [
-    // 1. Welcome - Editorial Concierge with Instant Links and Quick Action Buttons
+    // 1. Welcome — Jasmin introduces herself with warmth, links and quick options
     {
       id: 'welcome',
       type: 'message',
-      text: 'Hello! Welcome to AMB BOUTIQUE ✨\n\nI’m your virtual concierge. How can I assist you today?\n\n1️⃣ Track My Order: https://www.ambboutique.online/track-order\n2️⃣ Explore Collections: https://www.ambboutique.online/collections\n3️⃣ Shipping: Yes, we ship to all 50 U.S. states (including San Diego, CA)!\n\nTap an option below or type your question (e.g. "midi dress", "track order", "shipping"):',
-      text_returning: 'Wonderful to see you again at AMB BOUTIQUE ✨\n\nHow can I help you today? Whether you are looking for our midi dresses, heels, delivery times, or tracking an order, let me know or tap an option below:\n👉 Collections: https://www.ambboutique.online/collections\n👉 Order Tracker: https://www.ambboutique.online/track-order',
+      text: 'Hi there, lovely! 🌸 Welcome to AMB BOUTIQUE.\n\nI’m Jasmin L., your AMB virtual stylist, and I’m so happy you stopped by! ✨\n\nWhether you’re dreaming of the perfect midi dress, curious about delivery, or checking on an order, I’m here for you:\n\n💕 Our collections: https://www.ambboutique.online/collections\n📦 Order tracker: https://www.ambboutique.online/track-order\n🇺🇸 We deliver beautifully to all 50 U.S. states\n\nJust tap an option below or tell me what you have in mind 😊',
+      text_returning: 'Welcome back, beautiful! 🌸 It’s Jasmin L., your AMB virtual stylist — so lovely to see you again! ✨\n\nWhat can I help you with today? A new favorite dress, a little update on your order, or delivery details? I’m all yours 💕\n\n👗 Collections: https://www.ambboutique.online/collections\n📦 Order tracker: https://www.ambboutique.online/track-order',
       quick_replies: [
         { title: '👗 Midi Dresses', payload: 'DRESS' },
         { title: '📦 Track My Order', payload: 'ORDER' },
@@ -30,13 +30,13 @@ export function buildAmbBoutiqueMaster() {
       next: 'first_wait'
     },
     wait('first_wait', 'first_route', 'reminder', { timeout_seconds: 3600, on_timeout_without_window: 'finish', deadline_seconds_from_start: 259200 }),
-    { id: 'reminder', type: 'message', text: 'Just checking in to make sure you have everything you need ✨ Reply anytime for sizing, styling, or order assistance. Type STOP to unsubscribe.', next: 'finish' },
+    { id: 'reminder', type: 'message', text: 'Just a gentle hello from Jasmin 🌸 I’m still right here whenever you’d like a little styling advice, sizing help, or an update on your order. Take your time, lovely 💕\n\n(Reply STOP anytime to unsubscribe.)', next: 'finish' },
 
-    // 2. Intelligent Intent Router (San Diego, Midi Dress, Tracking, Delivery)
+    // 2. Intent router — name coincidence, orders, dresses, delivery, sizing, VIP
     { id: 'first_route', type: 'switch', operator: 'contains', cases: [
+      { id: 'fr_name', label: 'Name Jasmin', value: 'JASMIN', next: 'name_moment' },
       { id: 'fr_order', label: 'Order', value: 'ORDER', next: 'order_lookup' },
       { id: 'fr_track', label: 'Track', value: 'TRACK', next: 'order_lookup' },
-      { id: 'fr_code', label: 'Code / Reference', value: 'CODE', next: 'order_lookup' },
       { id: 'fr_dress', label: 'Dresses / Midi', value: 'DRESS', next: 'dresses_info' },
       { id: 'fr_loc', label: 'Location / Boutique', value: 'LOC', next: 'location_info' },
       { id: 'fr_sandiego', label: 'San Diego / CA', value: 'SAN DIEGO', next: 'shipping_info' },
@@ -46,12 +46,15 @@ export function buildAmbBoutiqueMaster() {
       { id: 'fr_vip', label: 'VIP Perk', value: 'VIP', next: 'customer_vip_upsell' }
     ], default: 'showcase' },
 
-    // 3. Location & Online Operations Policy
-    { id: 'location_info', type: 'message', text: 'AMB BOUTIQUE is an exclusively online boutique ✨\n\nTo offer our customers curated collections, competitive pricing, and fast dispatch, we operate 100% online. We deliver directly to customers across the entire United States (including California) and worldwide.\n\nWe maintain fulfillment facilities in multiple countries, including the United States, Australia, and the United Kingdom, allowing us to deliver quickly and safely to your doorstep without physical showroom markups.\n\nShop our collections online: https://www.ambboutique.online', next: 'location_cta' },
-    { id: 'location_cta', type: 'buttons', text: 'Explore our collections online or check shipping estimates:', buttons: [
+    // 3. Name coincidence — sweet reaction, then gracefully back to the boutique
+    { id: 'name_moment', type: 'message', text: 'Oh, that’s just the sweetest! 🥹💕 What a lovely coincidence — clearly Jasmin is a name for wonderful women! Please send her a warm hug from me.\n\nNow, let me spoil you a little… I’ve picked a few pieces I think you’ll absolutely adore ✨', next: 'showcase' },
+
+    // 4. Online boutique policy
+    { id: 'location_info', type: 'message', text: 'Such a great question, lovely! 🌸\n\nAMB BOUTIQUE is an exclusively online boutique — that’s how we bring you curated collections at thoughtful prices, without showroom markups.\n\nWe have fulfillment centers in several countries, including the United States, Australia and the United Kingdom, so your pieces reach you quickly and safely, right at your doorstep 💕\n\nYou can explore everything here: https://www.ambboutique.online', next: 'location_cta' },
+    { id: 'location_cta', type: 'buttons', text: 'Would you like to browse or see delivery times? 💕', buttons: [
       link('Shop All Pieces', site + '/collections'),
-      postback('Shipping Estimates', 'DELIV'),
-      postback('Contact Concierge', 'HELP')
+      postback('Delivery Times', 'DELIV'),
+      postback('Talk to Our Team', 'HELP')
     ], next: 'location_wait' },
     wait('location_wait', 'location_route'),
 
@@ -60,11 +63,11 @@ export function buildAmbBoutiqueMaster() {
       { id: 'lr_help', label: 'Help', value: 'HELP', next: 'human_concierge' }
     ], default: 'customer_vip_upsell' },
 
-    // 4. Shop All / Featured Collection
-    { id: 'showcase', type: 'buttons', text: 'Explore our contemporary women’s collections curated for effortless style ✨', buttons: [
+    // 5. Showcase
+    { id: 'showcase', type: 'buttons', text: 'Pieces our clients are loving right now ✨', buttons: [
       link('Shop All Pieces', site + '/collections'),
       link('Midi & Dresses', site + '/collections/dresses'),
-      postback('VIP Member Perks', 'VIP')
+      postback('My VIP Perk', 'VIP')
     ], next: 'showcase_wait' },
     wait('showcase_wait', 'showcase_route'),
 
@@ -75,12 +78,12 @@ export function buildAmbBoutiqueMaster() {
       { id: 'sr_order', label: 'Track Order', value: 'ORDER', next: 'order_lookup' }
     ], default: 'customer_vip_upsell' },
 
-    // 5. Official Shipping & Estimates by Region (Explicit San Diego Confirmation)
-    { id: 'shipping_info', type: 'message', text: 'AMB BOUTIQUE Shipping & Delivery Estimates 📦✨\n\n• Yes! We deliver across the entire United States (including San Diego, California & all 50 states)!\n• Complimentary Free Shipping on U.S. orders $99+ (Standard delivery in 12–18 business days).\n• Order Processing: In-stock orders are prepared within 1–3 business days.\n• Real-time Tracking: Direct tracking link updated door-to-door from dispatch to delivery!\n• Canada & United Kingdom: ~10–21 business days.\n• Australia & New Zealand: ~12–21 business days.\n\nFull details available at https://www.ambboutique.online/shipping', next: 'shipping_cta' },
-    { id: 'shipping_cta', type: 'buttons', text: 'Would you like to explore the shop or track an existing order?', buttons: [
+    // 6. Shipping (explicit U.S. / San Diego confirmation)
+    { id: 'shipping_info', type: 'message', text: 'Absolutely, lovely! 🌸 We deliver to all 50 U.S. states — San Diego and all of California included 💕\n\nHere’s how it works:\n• Your order is lovingly prepared within 1–3 business days\n• U.S. delivery: 12–18 business days\n• Complimentary U.S. shipping on orders $99+ ✨\n• Canada & UK: about 10–21 business days\n• Australia & New Zealand: about 12–21 business days\n• You’ll receive a tracking link so you can follow your pieces all the way to your door\n\nAll the details: https://www.ambboutique.online/shipping', next: 'shipping_cta' },
+    { id: 'shipping_cta', type: 'buttons', text: 'Shall we find your next favorite piece? 💕', buttons: [
       link('Shop Collections', site + '/collections'),
       link('Track an Order', site + '/track-order'),
-      postback('Contact Concierge', 'HELP')
+      postback('Talk to Our Team', 'HELP')
     ], next: 'shipping_wait' },
     wait('shipping_wait', 'shipping_route'),
 
@@ -89,9 +92,9 @@ export function buildAmbBoutiqueMaster() {
       { id: 'shr_vip', label: 'VIP Perks', value: 'VIP', next: 'customer_vip_upsell' }
     ], default: 'customer_vip_upsell' },
 
-    // 6. Size Guide & Fit Guidance
-    { id: 'size_guide', type: 'message', text: 'Size & Fit Guidance 📏\n\nOur garments follow standard U.S. sizing (US 2 to 12):\n• US 2: Bust 33" (84cm) | Waist 25" (64cm) | Hip 35" (89cm)\n• US 4: Bust 34" (86cm) | Waist 26" (66cm) | Hip 36" (91cm)\n• US 6: Bust 35" (89cm) | Waist 27" (69cm) | Hip 37" (94cm)\n• US 8: Bust 36" (91cm) | Waist 28" (71cm) | Hip 38" (97cm)\n• US 10–12: Check our full interactive guide online!\n\nFor shoes, we recommend measuring foot length in centimeters for the perfect fit.', next: 'size_cta' },
-    { id: 'size_cta', type: 'buttons', text: 'View our complete interactive size chart or reach out for fit advice:', buttons: [
+    // 7. Size guide
+    { id: 'size_guide', type: 'message', text: 'Finding your perfect fit is my favorite part! 📏💕\n\nOur pieces follow standard U.S. sizing:\n• US 2: Bust 33" | Waist 25" | Hip 35"\n• US 4: Bust 34" | Waist 26" | Hip 36"\n• US 6: Bust 35" | Waist 27" | Hip 37"\n• US 8: Bust 36" | Waist 28" | Hip 38"\n• US 10–12: see our full guide online\n\nFor shoes, measuring your foot length in centimeters gives the most flattering fit. If you’re between sizes, just tell me — I’m happy to help you choose 🌸\n\nFull guide: https://www.ambboutique.online/size-guide', next: 'size_cta' },
+    { id: 'size_cta', type: 'buttons', text: 'Your full size guide, or a little fit advice? 🌸', buttons: [
       link('Full Size Guide', site + '/size-guide'),
       link('Shop Dresses', site + '/collections/dresses'),
       postback('Fit Advice', 'HELP')
@@ -103,21 +106,21 @@ export function buildAmbBoutiqueMaster() {
       { id: 'sz_vip', label: 'VIP Perks', value: 'VIP', next: 'customer_vip_upsell' }
     ], default: 'customer_vip_upsell' },
 
-    // 7. Order Lookup & Tracking (100% AMB Boutique Branded)
+    // 8. Order lookup (100% AMB branded)
     {
       id: 'order_lookup',
       type: 'message',
-      text: 'Order & Delivery Concierge 📦✨\n\nOur system synchronizes your order, payment, shipping address, and live parcel tracking in real time from our fulfillment network directly to your doorstep.\n\nTo view your complete order details, carrier updates, and expected delivery date, simply open our live tracker below using your Order ID or checkout email:\n👉 https://www.ambboutique.online/track-order\n\nIf you need an exchange or quick address update, our concierge team is right here!',
+      text: 'Of course, lovely! I’d be delighted to help you with your order 📦💕\n\nYou can see everything about it — your pieces, delivery address, and every step of the journey to your door — right here, using your order number or checkout email:\n👉 https://www.ambboutique.online/track-order\n\nIf anything needs a little attention, like an exchange or an address update, our team will gladly take care of it for you 🌸',
       next: 'order_cta'
     },
     {
       id: 'order_cta',
       type: 'buttons',
-      text: 'Track your order live, unlock VIP perks, or reach our concierge:',
+      text: 'Follow your order, or unlock a little gift? ✨',
       buttons: [
         link('Track My Order', site + '/track-order'),
-        postback('VIP Member Perks', 'VIP'),
-        postback('Contact Support', 'HELP')
+        postback('My VIP Perk', 'VIP'),
+        postback('Talk to Our Team', 'HELP')
       ],
       next: 'order_wait'
     },
@@ -135,36 +138,36 @@ export function buildAmbBoutiqueMaster() {
       default: 'customer_vip_upsell'
     },
 
-    // 8. Specific Product Inquiry: Midi Dresses & Collections (Direct Instant Response)
+    // 9. Midi dresses
     {
       id: 'dresses_info',
       type: 'message',
-      text: 'Yes! We have stunning midi dresses and contemporary pieces available ✨\n\nOur dresses are curated for effortless elegance, from everyday midi silhouettes to elevated evening wear. Every piece is crafted with premium fabrics and tailored fit.\n\nExplore our Dresses & Midi Collection directly:\n👉 https://www.ambboutique.online/collections/dresses\n\nUse code VIP10 at checkout for an extra 10% OFF!',
+      text: 'Oh, you have wonderful taste! 😍 Yes, we have gorgeous midi dresses waiting for you 💕\n\nFrom effortless everyday silhouettes to elegant evening looks, each one is chosen for a soft, flattering drape and beautiful fabrics — the kind of dress that makes you feel special the moment you put it on ✨\n\nTake a peek here:\n👉 https://www.ambboutique.online/collections/dresses\n\nAnd a little secret: use code VIP10 at checkout for an extra 10% OFF 🌸',
       next: 'dresses_cta'
     },
     {
       id: 'dresses_cta',
       type: 'buttons',
-      text: 'Shop midi dresses online or contact concierge:',
+      text: 'Shall I show you the dresses, lovely? 💕',
       buttons: [
         link('Shop Midi Dresses', site + '/collections/dresses'),
         link('Shop All Pieces', site + '/collections'),
-        postback('Contact Stylist', 'HELP')
+        postback('Ask Our Stylists', 'HELP')
       ],
       next: 'finish'
     },
 
-    // 9. Customer Cross-Sell & VIP Upsell
+    // 10. VIP perk
     {
       id: 'customer_vip_upsell',
       type: 'message',
-      text: 'Exclusive VIP Perk for AMB Clients ✨\n\nThank you for connecting with AMB BOUTIQUE! Here is your exclusive returning-client perk:\n\n• Code VIP10: 10% OFF your next piece\n• Stackable with Cart Rewards (up to 25% OFF at $500+)\n• Complimentary U.S. Shipping on orders $99+\n\nShop our collection with your VIP code:\n👉 https://www.ambboutique.online/collections\n\nLooking for midi dresses or shoes? Browse directly above!',
+      text: 'I saved something special just for you 💎✨\n\n• Code VIP10 — an extra 10% OFF your order\n• Automatic cart rewards — up to 25% OFF on orders of $500+\n• Complimentary U.S. shipping on orders $99+\n\nIt’s the perfect excuse to treat yourself 💕\n👉 https://www.ambboutique.online/collections\n\nAnd if you’d love help choosing a dress, shoes or your size, just ask me 🌸',
       next: 'vip_cta'
     },
     {
       id: 'vip_cta',
       type: 'buttons',
-      text: 'Shop curated drops with code VIP10:',
+      text: 'Treat yourself with code VIP10 ✨',
       buttons: [
         link('Shop Midi Dresses', site + '/collections/dresses'),
         link('Shoes & Heels', site + '/collections/heels'),
@@ -173,21 +176,20 @@ export function buildAmbBoutiqueMaster() {
       next: 'finish'
     },
 
-    // 10. Personal Concierge & Human Support
+    // 11. Human team
     {
       id: 'human_concierge',
       type: 'message',
-      text: 'Our team is here to assist you personally! 🙂\n\nIf you have a question about an existing order or need help with sizing, email us directly at info@ambboutique.online with your Order ID, and a dedicated stylist will respond promptly.\n\nPrefer to keep shopping? Visit https://www.ambboutique.online',
+      text: 'I’d love for our team to take care of you personally 🌸\n\nJust email info@ambboutique.online with your order number (if you have one), and one of our stylists will get back to you very soon 💕\n\nIn the meantime, feel free to browse: https://www.ambboutique.online',
       next: 'finish'
     },
 
-    // 11. Finish
     { id: 'finish', type: 'end' }
   ];
 
   const labels = {
-    welcome: 'Welcome AMB', first_wait: 'Wait Reply', reminder: 'Gentle Reminder',
-    first_route: 'Intent Router',
+    welcome: 'Welcome (Jasmin L.)', first_wait: 'Wait Reply', reminder: 'Gentle Reminder',
+    first_route: 'Intent Router', name_moment: 'Name Coincidence',
     location_info: 'Online Boutique Policy', location_cta: 'Online Actions', location_wait: 'Wait Location', location_route: 'Location Target',
     order_lookup: 'Order & Tracking Portal', order_cta: 'Order Actions', order_wait: 'Wait Order', order_route: 'Order Target',
     dresses_info: 'Midi Dresses Info', dresses_cta: 'Midi Dress Actions',
@@ -199,7 +201,7 @@ export function buildAmbBoutiqueMaster() {
 
   const positions = {
     welcome: [40, 320], first_wait: [370, 320], reminder: [370, 620],
-    first_route: [700, 320],
+    first_route: [700, 320], name_moment: [700, 620],
     location_info: [1030, -500], location_cta: [1360, -500], location_wait: [1690, -500], location_route: [2020, -500],
     order_lookup: [1030, -200], order_cta: [1360, -200], order_wait: [1690, -200], order_route: [2020, -200],
     dresses_info: [1030, -50], dresses_cta: [1360, -50],
@@ -241,15 +243,7 @@ export async function syncAmbBoutiqueFlow(db) {
 
     if (flow) {
       const currentConfig = typeof flow.configuration === 'string' ? flow.configuration : JSON.stringify(flow.configuration);
-      if (
-        currentConfig.includes('dresses_info') &&
-        currentConfig.includes('quick_replies') &&
-        currentConfig.includes('fr_sandiego') &&
-        currentConfig.includes('customer_vip_upsell') &&
-        !currentConfig.includes('AliExpress') &&
-        !currentConfig.includes('aliexpress') &&
-        flow.enabled === 1
-      ) {
+      if (currentConfig === configStr && flow.enabled === 1) {
         return { ok: true, already: true, flowId: flow.id, version: flow.version, enabled: flow.enabled };
       }
       await db.prepare(
