@@ -12,7 +12,7 @@ async function setup(t,trigger='dm_keyword',g=graph()){
 }
 async function ingest(env,body){await enqueueWebhook(body,env);await processPending(env);await processConversations(env);}
 const session=db=>db.prepare('SELECT * FROM conversation_sessions ORDER BY created_at LIMIT 1').first();
-test('graph validation rejects cycles, dangling edges, unreachable nodes and oversized waits',()=>{assert.equal(validateGraph(graph()).ok,true);for(const mutate of [g=>g.nodes[0].next='question',g=>g.nodes[0].next='missing',g=>g.nodes.push({id:'orphan',type:'end'}),g=>g.nodes[1].timeout_seconds=86401]){const g=graph();mutate(g);assert.equal(validateGraph(g).ok,false);}});
+test('graph validation rejects cycles, dangling edges, unreachable nodes and oversized waits',()=>{assert.equal(validateGraph(graph()).ok,true);for(const mutate of [g=>g.nodes[0].next='question',g=>g.nodes[0].next='missing',g=>g.nodes.push({id:'orphan',type:'end'}),g=>g.nodes[1].timeout_seconds=259201]){const g=graph();mutate(g);assert.equal(validateGraph(g).ok,false);}});
 test('actual queued inbound DM asks a question, waits durably and branches on the next normalized user reply',async t=>{
  const{db,env,sent}=await setup(t);await ingest(env,dm('start'));assert.equal(sent.length,1);assert.equal((await session(db)).status,'waiting_reply');assert.equal(sent[0].message.text,'Qual produto você procura?');
  const before=await session(db);assert.ok(!before.encrypted_state.includes('INICIAR'));const state=JSON.parse(await decryptToken(before.encrypted_state,env.TOKEN_ENCRYPTION_KEY));assert.equal(state.graph.start,'question');
