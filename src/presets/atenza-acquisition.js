@@ -213,21 +213,21 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
 }
 
 export async function syncAtenzaFlow(db) {
-  if (!db) return false;
+  if (!db) return { error: 'no_db' };
   try {
     const flowId = '5078253c-2cd9-4b76-8174-d3886b6d4016';
-    const flow = await db.prepare('SELECT * FROM flows WHERE id = ?').bind(flowId).first();
-    if (!flow) return false;
+    const flow = await db.prepare('SELECT id, version, enabled, configuration FROM flows WHERE id = ?').bind(flowId).first();
+    if (!flow) return { error: 'flow_not_found' };
     const configStr = typeof flow.configuration === 'string' ? flow.configuration : JSON.stringify(flow.configuration);
     if (configStr.includes('plans_video') && configStr.includes('atenza-explica.mp4') && flow.enabled === 1) {
-      return false;
+      return { ok: true, already: true, version: flow.version, enabled: flow.enabled };
     }
     const preset = buildAtenzaMaster();
     await db.prepare(
       'UPDATE flows SET configuration = ?, enabled = 1, version = version + 1 WHERE id = ?'
     ).bind(JSON.stringify(preset.configuration), flowId).run();
-    return true;
+    return { ok: true, updated: true, newVersion: flow.version + 1 };
   } catch (err) {
-    return false;
+    return { error: err.message };
   }
 }
