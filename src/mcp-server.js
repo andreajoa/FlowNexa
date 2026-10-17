@@ -1,0 +1,236 @@
+/**
+ * FlowNexa Official Model Context Protocol (MCP) Server
+ * Compatible with Claude Code, OpenAI Codex, Cursor, and any MCP client.
+ * Provides safe, zero-trust tools for AI agents to inspect, validate, and build
+ * conversation graphs directly in the FlowNexa client dashboard.
+ */
+
+import { validateGraph } from './conversation-graph.js';
+
+export const MCP_TOOLS = [
+ {
+  name: 'flownexa_list_flows',
+  description: 'List all Instagram automation flows in the client workspace, showing IDs, names, trigger types, and node counts.',
+  inputSchema: {
+   type: 'object',
+   properties: {}
+  }
+ },
+ {
+  name: 'flownexa_get_flow',
+  description: 'Retrieve detailed information about a specific flow, including its full conversation graph (nodes, edges, conditions, and copy).',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    flow_id: { type: 'string', description: 'The UUID of the flow to inspect.' }
+   },
+   required: ['flow_id']
+  }
+ },
+ {
+  name: 'flownexa_validate_graph',
+  description: 'Validate a conversation graph before applying it. Checks node limit (max 30), DAG acyclic rules, reachability from start node, and button length constraints.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    graph: {
+     type: 'object',
+     description: 'The conversation graph object containing version (1), start node id, and array of nodes.',
+     properties: {
+      version: { type: 'number', enum: [1] },
+      start: { type: 'string' },
+      nodes: { type: 'array' }
+     },
+     required: ['version', 'start', 'nodes']
+    }
+   },
+   required: ['graph']
+  }
+ },
+ {
+  name: 'flownexa_update_graph',
+  description: 'Update the conversation graph nodes and edges for a flow. Automatically validates graph integrity and pauses flow until published.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    flow_id: { type: 'string', description: 'The UUID of the flow to update.' },
+    name: { type: 'string', description: 'Optional updated display name for the flow.' },
+    graph: {
+     type: 'object',
+     description: 'The complete validated conversation graph object.',
+     properties: {
+      version: { type: 'number', enum: [1] },
+      start: { type: 'string' },
+      nodes: { type: 'array' }
+     },
+     required: ['version', 'start', 'nodes']
+    }
+   },
+   required: ['flow_id', 'graph']
+  }
+ },
+ {
+  name: 'flownexa_publish_flow',
+  description: 'Publish or pause an automation flow in the client dashboard.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    flow_id: { type: 'string', description: 'The UUID of the flow.' },
+    enabled: { type: 'boolean', description: 'True to publish/activate, false to pause.' }
+   },
+   required: ['flow_id', 'enabled']
+  }
+ },
+ {
+  name: 'flownexa_get_node_templates',
+  description: 'Get syntax templates and schema limits for conversation graph nodes (message, buttons, wait_reply, condition, switch, delay, end).',
+  inputSchema: {
+   type: 'object',
+   properties: {}
+  }
+ }
+];
+
+export class FlowNexaMcpClient {
+ constructor({ baseUrl = 'https://app.flownexa.online', apiKey }) {
+  this.baseUrl = baseUrl.replace(/\/+$/, '');
+  this.apiKey = apiKey;
+ }
+
+ async request(path, options = {}) {
+  const headers = {
+   'Authorization': `Bearer ${this.apiKey}`,
+   'Content-Type': 'application/json',
+   ...options.headers
+  };
+  const res = await fetch(`${this.baseUrl}${path}`, {
+   ...options,
+   headers
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+   throw new Error(data.error || data.details || `HTTP_${res.status}`);
+  }
+  return data;
+ }
+
+ async listFlows() {
+  return this.request('/api/v1/agent/flows');
+ }
+
+ async getFlow(flowId) {
+  return this.request(`/api/v1/agent/flows/${encodeURIComponent(flowId)}`);
+ }
+
+ async updateGraph(flowId, graph, name) {
+  return this.request(`/api/v1/agent/flows/${encodeURIComponent(flowId)}/graph`, {
+   method: 'PUT',
+   body: JSON.stringify({ graph, name })
+  });
+ }
+
+ async publishFlow(flowId, enabled) {
+  return this.request(`/api/v1/agent/flows/${encodeURIComponent(flowId)}/publish`, {
+   method: 'POST',
+   body: JSON.stringify({ enabled })
+  });
+ }
+
+ async getTemplates() {
+  return this.request('/api/v1/agent/templates');
+ }
+}
+
+export function handleMcpRequest(client, rpc) {
+ if (!rpc || typeof rpc !== 'object') {
+  return { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } };
+ }
+ const { id, method, params } = rpc;
+
+ if (method === 'initialize') {
+  return {
+   jsonrpc: '2.0',
+   id,
+   result: {
+    protocolVersion: '2024-11-05',
+    capabilities: { tools: {} },
+    serverInfo: { name: 'flownexa-mcp', version: '1.0.0' }
+   }
+  };
+ }
+
+ if (method === 'notifications/initialized') {
+  return null;
+ }
+
+ if (method === 'tools/list') {
+  return {
+   jsonrpc: '2.0',
+   id,
+   result: { tools: MCP_TOOLS }
+  };
+ }
+
+ if (method === 'tools/call') {
+  const { name, arguments: args = {} } = params || {};
+  return executeToolCall(client, id, name, args);
+ }
+
+ return {
+  jsonrpc: '2.0',
+  id,
+  error: { code: -32601, message: `Method not found: ${method}` }
+ };
+}
+
+async function executeToolCall(client, id, name, args) {
+ try {
+  let content;
+  if (name === 'flownexa_list_flows') {
+   const res = await client.listFlows();
+   content = JSON.stringify(res, null, 2);
+  } else if (name === 'flownexa_get_flow') {
+   const res = await client.getFlow(args.flow_id);
+   content = JSON.stringify(res, null, 2);
+  } else if (name === 'flownexa_validate_graph') {
+   const result = validateGraph(args.graph);
+   content = JSON.stringify({
+    valid: result.ok,
+    error: result.error || null,
+    node_count: args.graph?.nodes?.length || 0
+   }, null, 2);
+  } else if (name === 'flownexa_update_graph') {
+   const res = await client.updateGraph(args.flow_id, args.graph, args.name);
+   content = JSON.stringify(res, null, 2);
+  } else if (name === 'flownexa_publish_flow') {
+   const res = await client.publishFlow(args.flow_id, args.enabled);
+   content = JSON.stringify(res, null, 2);
+  } else if (name === 'flownexa_get_node_templates') {
+   const res = await client.getTemplates();
+   content = JSON.stringify(res, null, 2);
+  } else {
+   return {
+    jsonrpc: '2.0',
+    id,
+    error: { code: -32601, message: `Tool not found: ${name}` }
+   };
+  }
+
+  return {
+   jsonrpc: '2.0',
+   id,
+   result: {
+    content: [{ type: 'text', text: content }]
+   }
+  };
+ } catch (err) {
+  return {
+   jsonrpc: '2.0',
+   id,
+   result: {
+    isError: true,
+    content: [{ type: 'text', text: `Error: ${err.message}` }]
+   }
+  };
+ }
+}
