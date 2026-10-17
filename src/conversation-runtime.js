@@ -49,8 +49,15 @@ async function drive(env,row,state,deadline){
   if(node.type==='delay'){state.afterMessage=false;await save(env,row,state,{status:'delayed',due_at:Date.now()+node.seconds*1000});return;}
   if(!['message','image','video','buttons'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   let event,action;
-  if(state.origin.kind==='comment'&&!state.sentFirst){event=state.origin;action={type:'private_reply',text:node.text};}
-  else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:node.text,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:['image','video'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
+  let textMsg=node.text;
+  if(node.id==='welcome'){
+   if(state.isReturning&&node.text_returning)textMsg=node.text_returning;
+   else if(state.isReturning)textMsg='Oi de novo! Que bom falar com você por aqui 🙂\n\nVi que já conversamos antes por aqui. Como posso te ajudar hoje? Quer ver os planos, continuar de onde paramos ou precisa de suporte com a sua conta?';
+   else if(state.origin.kind==='dm'&&node.text_dm)textMsg=node.text_dm;
+   else if(state.origin.kind==='dm')textMsg='Oi! Aqui é a equipe da Atenza 👋\n\nQue bom ter você por aqui! A gente ajuda empresas a organizar o WhatsApp com múltiplos atendentes no mesmo número, agentes de IA e CRM com funil.\n\nVocê já conhece a Atenza ou é seu primeiro contato?';
+  }
+  if(state.origin.kind==='comment'&&!state.sentFirst){event=state.origin;action={type:'private_reply',text:textMsg};}
+  else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:['image','video'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
   action.source_at=event.at;
   const effect=await sha('conversation:'+row.id+':'+row.step_index),jobId=await sha('conversation-job:'+effect);
   await env.DB.prepare('INSERT OR IGNORE INTO automation_jobs(id,event_id,account_id,workspace_id,flow_id,flow_version,action_index,action_type,effect_key,encrypted_action) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(jobId,row.origin_event_id,row.account_id,row.workspace_id,row.flow_id,row.flow_version,1000+row.step_index,action.type,effect,await encryptToken(JSON.stringify(action),env.TOKEN_ENCRYPTION_KEY)).run();
@@ -85,8 +92,11 @@ export async function startConversation(env,account,flow,event,eventId){
  if(isOptOut(c,event)||await campaignSuppressed(env,account.id,flow.id,await sha(event.sender_id)))return'opted_out';
  const suppressed=await env.DB.prepare("SELECT id FROM conversation_sessions WHERE account_id=? AND flow_id=? AND recipient_hash=? AND error='opted_out' LIMIT 1").bind(account.id,flow.id,await sha(event.sender_id)).first();if(suppressed)return'opted_out';
  const prior=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(eventId).first();if(prior)return'conversation_started';
- const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false};
- const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,await sha(event.sender_id),eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
+ const recipient=await sha(event.sender_id);
+ const priorSession=await env.DB.prepare("SELECT id,node_id,status,encrypted_state,updated_at FROM conversation_sessions WHERE account_id=? AND recipient_hash=? ORDER BY updated_at DESC LIMIT 1").bind(account.id,recipient).first();
+ const isReturning=Boolean(priorSession);
+ const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
+ const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,recipient,eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
  return inserted.meta.changes?'conversation_started':'conversation_already_active';
 }
 export async function resumeConversation(env,account,event,eventId){
