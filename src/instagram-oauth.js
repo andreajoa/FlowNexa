@@ -38,7 +38,15 @@ const form=new URLSearchParams({client_id:env.META_APP_ID,client_secret:env.META
 const exchange=await (env.META_FETCH||fetch)("https://api.instagram.com/oauth/access_token",{method:"POST",body:form,signal:AbortSignal.timeout(15000)});
 const short=await exchange.json().catch(()=>({}));if(!exchange.ok||!short.access_token)return J({error:"token_exchange_failed",detail:short?.error?.message||short?.error_description||short?.error||null},502);
 const longer=new URL("https://graph.instagram.com/access_token");longer.search=new URLSearchParams({grant_type:"ig_exchange_token",client_secret:env.META_APP_SECRET,access_token:short.access_token}).toString();
-const long=await (env.META_FETCH||fetch)(longer,{signal:AbortSignal.timeout(15000)});const tokenData=await long.json().catch(()=>({}));if(!long.ok||!tokenData.access_token)return J({error:"long_token_exchange_failed",detail:tokenData?.error?.message||tokenData?.error_description||tokenData?.error||null},502);
+let long=await (env.META_FETCH||fetch)(longer,{signal:AbortSignal.timeout(15000)});let tokenData=await long.json().catch(()=>({}));
+if(!long.ok||!tokenData.access_token){
+try{
+const postRes=await (env.META_FETCH||fetch)("https://graph.instagram.com/access_token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"ig_exchange_token",client_secret:env.META_APP_SECRET,access_token:short.access_token}),signal:AbortSignal.timeout(15000)});
+const postData=await postRes.json().catch(()=>({}));
+if(postRes.ok&&postData.access_token){long=postRes;tokenData=postData;}
+}catch{}
+}
+if(!long.ok||!tokenData.access_token)return J({error:"long_token_exchange_failed",detail:tokenData?.error?.message||tokenData?.error_description||tokenData?.error||null},502);
 const profileUrl=new URL("https://graph.instagram.com/me");profileUrl.search=new URLSearchParams({fields:"user_id,username",access_token:tokenData.access_token}).toString();
 const response=await (env.META_FETCH||fetch)(profileUrl,{signal:AbortSignal.timeout(15000)});const profile=await response.json().catch(()=>({}));
 if(!response.ok||typeof profile.username!=="string"||!profile.username||!/^\d+$/.test(String(profile.user_id||"")))return J({error:"instagram_profile_failed",detail:profile?.error?.message||profile?.error||null},502);
