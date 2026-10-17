@@ -52,7 +52,12 @@ async function drive(env,row,state,deadline){
   let textMsg=node.text;
   if(node.id==='welcome'){
    if(state.isReturning&&node.text_returning)textMsg=node.text_returning;
-   else if(state.isReturning)textMsg='Oi de novo! Que bom falar com você por aqui 🙂\n\nVi que já conversamos antes por aqui. Como posso te ajudar hoje? Quer ver os planos, continuar de onde paramos ou precisa de suporte com a sua conta?';
+   else if(state.isReturning){
+    const last=state.priorNodeId;
+    if(['pos_venda','pos_ia','pos_auto'].includes(last))textMsg='Oi de novo! Que bom falar com você 🙂\n\nComo posso te ajudar no seu painel da Atenza hoje? Quer calibrar seus agentes de IA, criar novas automações ou precisa de suporte?';
+    else if(['plans','plans_cta'].includes(last))textMsg='Oi de novo! Que bom te ver por aqui 🙂\n\nVi que você já consultou nossos planos da Atenza. Conseguiu iniciar seu teste de 7 dias grátis ou ficou com alguma dúvida sobre qual plano escolher pro seu negócio?';
+    else textMsg='Oi de novo! Que bom falar com você por aqui 🙂\n\nVi que já conversamos antes por aqui. Como posso te ajudar hoje? Quer ver os planos, continuar de onde paramos ou precisa de suporte com a sua conta?';
+   }
    else if(state.origin.kind==='dm'&&node.text_dm)textMsg=node.text_dm;
    else if(state.origin.kind==='dm')textMsg='Oi! Aqui é a equipe da Atenza 👋\n\nQue bom ter você por aqui! A gente ajuda empresas a organizar o WhatsApp com múltiplos atendentes no mesmo número, agentes de IA e CRM com funil.\n\nVocê já conhece a Atenza ou é seu primeiro contato?';
   }
