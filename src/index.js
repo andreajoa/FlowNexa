@@ -35,7 +35,12 @@ export default {async fetch(request,env,ctx={}){
   if(!env.DB)return json({status:'degraded',database:false},503);
   let atenzaUpdated=false;
   try{atenzaUpdated=await syncAtenzaFlow(env.DB);}catch{}
-  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),atenzaUpdated});}catch{return json({status:'degraded',database:false},503);}
+  let accounts=[];
+  try{
+   const rows=await env.DB.prepare('SELECT id, workspace_id, username, ig_user_id, status, token_expires_at FROM instagram_accounts').all();
+   accounts=rows.results||[];
+  }catch{}
+  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),atenzaUpdated,accounts});}catch{return json({status:'degraded',database:false},503);}
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
