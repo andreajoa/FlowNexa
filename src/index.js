@@ -12,6 +12,7 @@ import {respond as json,sha} from './identity.js';
 import {messagingReady} from './meta-client.js';
 import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
 import {syncAtenzaFlow} from './presets/atenza-acquisition.js';
+import {syncAmbBoutiqueFlow} from './presets/amb-boutique-acquisition.js';
 export const TEMPLATES=[{id:'comment-link',name:'Comentou QUERO',trigger_type:'comment_keyword',scope:'selected',configuration:{keywords:['QUERO'],actions:[{type:'private_reply',text:'Aqui está o link solicitado.'}]}}];
 export function keywordMatch(content,words){const text=String(content||'').normalize('NFKC').toLocaleUpperCase('pt-BR');return Array.isArray(words)&&words.some(w=>String(w).trim()&&text.includes(String(w).normalize('NFKC').toLocaleUpperCase('pt-BR')))}
 export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==='selected'&&Array.isArray(selected)&&selected.includes(mediaId)}
@@ -33,14 +34,15 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/api/health'&&request.method==='GET'){
   if(!env.DB)return json({status:'degraded',database:false},503);
-  let atenzaUpdated=false;
+  let atenzaUpdated=false,ambUpdated=false;
   try{atenzaUpdated=await syncAtenzaFlow(env.DB);}catch{}
+  try{ambUpdated=await syncAmbBoutiqueFlow(env.DB);}catch{}
   let accounts=[];
   try{
    const rows=await env.DB.prepare('SELECT username, status FROM instagram_accounts').all();
    accounts=rows.results||[];
   }catch{}
-  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),atenzaUpdated,accounts});}catch{return json({status:'degraded',database:false},503);}
+  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),atenzaUpdated,ambUpdated,accounts});}catch{return json({status:'degraded',database:false},503);}
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
