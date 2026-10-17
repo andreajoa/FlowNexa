@@ -17,42 +17,48 @@ export function buildAmbBoutiqueMaster() {
   });
 
   const nodes = [
-    // 1. Welcome - Editorial Concierge (Pure Online Boutique + Customer Detection)
+    // 1. Welcome - Editorial Concierge with Direct Interactive Buttons
     {
       id: 'welcome',
       type: 'message',
-      text: 'Hello! Welcome to AMB BOUTIQUE ✨\n\nI’m your virtual concierge. How can I assist you today?\n\n• Already a customer? Share your Order ID / reference or tap Track Order for live parcel status.\n• Exploring new styles? Browse our curated collections & exclusive cart rewards!\n\nWhat can I help you find today?',
-      text_returning: 'Wonderful to see you again at AMB BOUTIQUE ✨\n\nHow can I help you today? Would you like to check the live status of an order, explore our newest arrivals, or get sizing advice?',
+      text: 'Hello! Welcome to AMB BOUTIQUE ✨\n\nI’m your virtual concierge. How can I assist you today? Please tap an option below or type your question:',
+      text_returning: 'Wonderful to see you again at AMB BOUTIQUE ✨\n\nHow can I help you today? Please tap an option below or type your question:',
+      quick_replies: [
+        { title: '📦 Track My Order', payload: 'ORDER' },
+        { title: '🚚 Delivery & Times', payload: 'DELIV' },
+        { title: '✨ Shop Collections', payload: 'SHOP' },
+        { title: '📍 Boutique Info', payload: 'LOC' }
+      ],
       next: 'first_wait'
     },
     wait('first_wait', 'first_route', 'reminder', { timeout_seconds: 3600, on_timeout_without_window: 'finish', deadline_seconds_from_start: 259200 }),
     { id: 'reminder', type: 'message', text: 'Just checking in to make sure you have everything you need ✨ Reply anytime for sizing, styling, or order assistance. Type STOP to unsubscribe.', next: 'finish' },
 
-    // 2. Intelligent Intent Router (Customer detection vs Inquiry)
+    // 2. Intelligent Intent Router (San Diego, Delivery, Tracking, Location & Sizing)
     { id: 'first_route', type: 'switch', operator: 'contains', cases: [
       { id: 'fr_order', label: 'Order', value: 'ORDER', next: 'order_lookup' },
-      { id: 'fr_pedid', label: 'Pedido', value: 'PEDID', next: 'order_lookup' },
-      { id: 'fr_track', label: 'Track / Rastreio', value: 'TRACK', next: 'order_lookup' },
-      { id: 'fr_bought', label: 'Bought / Comprei', value: 'BOUGHT', next: 'order_lookup' },
+      { id: 'fr_track', label: 'Track', value: 'TRACK', next: 'order_lookup' },
       { id: 'fr_code', label: 'Code / Reference', value: 'CODE', next: 'order_lookup' },
+      { id: 'fr_sandiego', label: 'San Diego / CA', value: 'SAN DIEGO', next: 'shipping_info' },
+      { id: 'fr_deliv', label: 'Delivery / Deliver', value: 'DELIV', next: 'shipping_info' },
+      { id: 'fr_ship', label: 'Shipping / Ship', value: 'SHIP', next: 'shipping_info' },
+      { id: 'fr_loc', label: 'Location / Boutique', value: 'LOC', next: 'location_info' },
       { id: 'fr_where', label: 'Where', value: 'WHERE', next: 'location_info' },
-      { id: 'fr_loc', label: 'Location', value: 'LOC', next: 'location_info' },
-      { id: 'fr_addr', label: 'Address', value: 'ADDR', next: 'location_info' },
-      { id: 'fr_ship', label: 'Shipping', value: 'SHIP', next: 'shipping_info' },
-      { id: 'fr_size', label: 'Size', value: 'SIZE', next: 'size_guide' }
+      { id: 'fr_size', label: 'Size & Fit', value: 'SIZE', next: 'size_guide' },
+      { id: 'fr_shop', label: 'Shop Collections', value: 'SHOP', next: 'showcase' }
     ], default: 'showcase' },
 
     // 3. Location & Online Operations Policy (Explicitly Online + Worldwide Warehouses)
-    { id: 'location_info', type: 'message', text: 'AMB BOUTIQUE is an exclusively online boutique ✨\n\nTo offer our customers curated collections, competitive pricing, and fast dispatch, we operate 100% online. We maintain fulfillment facilities in multiple countries, including the United States, Australia, and the United Kingdom, allowing us to serve and deliver to our customers quickly and efficiently worldwide.\n\nAll orders are processed securely through our official website: https://www.ambboutique.online', next: 'location_cta' },
+    { id: 'location_info', type: 'message', text: 'AMB BOUTIQUE is an exclusively online boutique ✨\n\nTo offer our customers curated collections, competitive pricing, and fast dispatch, we operate 100% online. We deliver directly to customers across the entire United States (including California) and worldwide.\n\nWe maintain fulfillment facilities in multiple countries, including the United States, Australia, and the United Kingdom, allowing us to deliver quickly and safely to your doorstep without physical showroom markups.\n\nShop our collections online: https://www.ambboutique.online', next: 'location_cta' },
     { id: 'location_cta', type: 'buttons', text: 'Explore our collections online or check shipping estimates:', buttons: [
       link('Shop All Pieces', site + '/collections'),
-      postback('Shipping Estimates', 'SHIP'),
+      postback('Shipping Estimates', 'DELIV'),
       postback('Contact Concierge', 'HELP')
     ], next: 'location_wait' },
     wait('location_wait', 'location_route'),
 
     { id: 'location_route', type: 'switch', operator: 'contains', cases: [
-      { id: 'lr_ship', label: 'Shipping', value: 'SHIP', next: 'shipping_info' },
+      { id: 'lr_ship', label: 'Shipping', value: 'DELIV', next: 'shipping_info' },
       { id: 'lr_help', label: 'Help', value: 'HELP', next: 'human_concierge' }
     ], default: 'customer_vip_upsell' },
 
@@ -66,7 +72,7 @@ export function buildAmbBoutiqueMaster() {
 
     { id: 'showcase_route', type: 'switch', operator: 'contains', cases: [
       { id: 'sr_cat', label: 'Categories', value: 'CATEGOR', next: 'categories_menu' },
-      { id: 'sr_ship', label: 'Shipping', value: 'SHIP', next: 'shipping_info' },
+      { id: 'sr_ship', label: 'Shipping', value: 'DELIV', next: 'shipping_info' },
       { id: 'sr_size', label: 'Sizing', value: 'SIZE', next: 'size_guide' },
       { id: 'sr_order', label: 'Track Order', value: 'ORDER', next: 'order_lookup' }
     ], default: 'categories_menu' },
@@ -80,14 +86,14 @@ export function buildAmbBoutiqueMaster() {
     wait('categories_wait', 'categories_route'),
 
     { id: 'categories_route', type: 'switch', operator: 'contains', cases: [
-      { id: 'cr_ship', label: 'Shipping', value: 'SHIP', next: 'shipping_info' },
+      { id: 'cr_ship', label: 'Shipping', value: 'DELIV', next: 'shipping_info' },
       { id: 'cr_size', label: 'Sizing', value: 'SIZE', next: 'size_guide' },
       { id: 'cr_track', label: 'Track', value: 'TRACK', next: 'order_lookup' },
       { id: 'cr_help', label: 'Help', value: 'HELP', next: 'human_concierge' }
     ], default: 'customer_vip_upsell' },
 
-    // 6. Official Shipping & Estimates by Region
-    { id: 'shipping_info', type: 'message', text: 'AMB BOUTIQUE Shipping & Delivery Estimates 📦\n\n• Order Processing: In-stock orders are prepared within 1–3 business days.\n• United States: Standard delivery in 12–18 business days (Complimentary Free Shipping on orders $99+).\n• Canada & United Kingdom: ~10–21 business days after dispatch.\n• Australia & New Zealand: ~12–21 business days.\n• Tracking: Real-time tracking link emailed as soon as your parcel ships!\n\nFull details available at https://www.ambboutique.online/shipping', next: 'shipping_cta' },
+    // 6. Official Shipping & Estimates by Region (Explicit San Diego & US Confirmation)
+    { id: 'shipping_info', type: 'message', text: 'AMB BOUTIQUE Shipping & Delivery Estimates 📦✨\n\n• Yes! We deliver across the entire United States (including San Diego, California & all 50 states)!\n• Complimentary Free Shipping on U.S. orders $99+ (Standard delivery in 12–18 business days).\n• Order Processing: In-stock orders are prepared within 1–3 business days.\n• Real-time Tracking: Direct tracking link updated door-to-door from dispatch to delivery!\n• Canada & United Kingdom: ~10–21 business days.\n• Australia & New Zealand: ~12–21 business days.\n\nFull details available at https://www.ambboutique.online/shipping', next: 'shipping_cta' },
     { id: 'shipping_cta', type: 'buttons', text: 'Would you like to explore the shop or track an existing order?', buttons: [
       link('Shop Collections', site + '/collections'),
       link('Track an Order', site + '/track-order'),
@@ -234,9 +240,9 @@ export async function syncAmbBoutiqueFlow(db) {
     if (flow) {
       const currentConfig = typeof flow.configuration === 'string' ? flow.configuration : JSON.stringify(flow.configuration);
       if (
-        currentConfig.includes('order_lookup') &&
+        currentConfig.includes('quick_replies') &&
+        currentConfig.includes('fr_sandiego') &&
         currentConfig.includes('customer_vip_upsell') &&
-        !currentConfig.includes('San Diego') &&
         !currentConfig.includes('AliExpress') &&
         !currentConfig.includes('aliexpress') &&
         flow.enabled === 1
