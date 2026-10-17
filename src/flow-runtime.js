@@ -6,6 +6,9 @@ export function validateFlow(trigger,scope,c){
  if(trigger.endsWith('_keyword')&&(!Array.isArray(c.keywords)||!c.keywords.length||c.keywords.length>20||c.keywords.some(x=>typeof x!=='string'||!x.trim()||x.length>80)))return{ok:false,error:'keywords_required'};
  if(scope==='selected'&&(!Array.isArray(c.media_ids)||!c.media_ids.length||c.media_ids.length>100||c.media_ids.some(x=>typeof x!=='string'||!/^\d+$/.test(x))))return{ok:false,error:'selected_media_required'};
  if(c.once_per_contact!==undefined&&typeof c.once_per_contact!=='boolean')return{ok:false,error:'invalid_once_per_contact'};
+ if(c.entry_points!==undefined&&(!Array.isArray(c.entry_points)||!c.entry_points.length||c.entry_points.length>3||c.entry_points.some(kind=>!['comment','dm','story'].includes(kind))||new Set(c.entry_points).size!==c.entry_points.length))return{ok:false,error:'invalid_entry_points'};
+ if(c.entry_points!==undefined&&!c.graph)return{ok:false,error:'engagement_graph_required'};
+ if(c.opt_out_keywords!==undefined&&(!Array.isArray(c.opt_out_keywords)||c.opt_out_keywords.length>10||c.opt_out_keywords.some(word=>typeof word!=='string'||!word.trim()||word.length>80)||new Set(c.opt_out_keywords.map(word=>normalize(word).trim())).size!==c.opt_out_keywords.length))return{ok:false,error:'invalid_opt_out_keywords'};
  if(c.graph)return validateGraph(c.graph);
  if(!Array.isArray(c.actions)||!c.actions.length||c.actions.length>5)return{ok:false,error:'actions_required'};
  const allowed=trigger.startsWith('comment')?new Set(['private_reply','public_reply']):new Set(['message']);
@@ -14,10 +17,13 @@ export function validateFlow(trigger,scope,c){
  return{ok:true};
 }
 const normalize=x=>String(x||'').normalize('NFKC').toLocaleUpperCase();
+export function isOptOut(configuration,event){return Array.isArray(configuration?.opt_out_keywords)&&configuration.opt_out_keywords.some(word=>{const normalized=normalize(word).trim();return normalized===normalize(event?.text).trim()||normalized===normalize(event?.payload).trim();});}
 export function matchFlow(flow,event){
  let c;try{c=typeof flow.configuration==='string'?JSON.parse(flow.configuration):flow.configuration}catch{return{matched:false,reason:'invalid_configuration'}}
  if(!validateFlow(flow.trigger_type,flow.scope,c).ok)return{matched:false,reason:'invalid_configuration'};
- if(flow.trigger_type.startsWith('comment')&&event.kind!=='comment'||flow.trigger_type==='dm_keyword'&&event.kind!=='dm'||flow.trigger_type==='story_reply'&&event.kind!=='story')return{matched:false,reason:'trigger'};
+ if(isOptOut(c,event))return{matched:false,reason:'opted_out'};
+ if(!['comment','dm','story'].includes(event.kind))return{matched:false,reason:'unsupported_event'};
+ if(c.entry_points?!c.entry_points.includes(event.kind):flow.trigger_type.startsWith('comment')&&event.kind!=='comment'||flow.trigger_type==='dm_keyword'&&event.kind!=='dm'||flow.trigger_type==='story_reply'&&event.kind!=='story')return{matched:false,reason:'trigger'};
  if(flow.scope==='selected'&&!c.media_ids.includes(String(event.media_id)))return{matched:false,reason:'scope'};
  if(flow.trigger_type.endsWith('_keyword')&&!c.keywords.some(w=>normalize(event.text).includes(normalize(w))))return{matched:false,reason:'keyword'};
  return{matched:true,actions:c.graph?[]:c.actions,configuration:c,...(c.graph?{graph:c.graph}:{})};

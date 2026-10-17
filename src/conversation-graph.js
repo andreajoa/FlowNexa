@@ -23,7 +23,7 @@ export function validateGraph(graph){
   if(n.type==='message'){if(!validOutboundAction(n))return invalid('invalid_graph_message');edges=[n.next];}
   else if(['image','video'].includes(n.type)){if(!validOutboundAction(n))return invalid('invalid_graph_media');edges=[n.next];}
   else if(n.type==='buttons'){if(!validOutboundAction(n))return invalid('invalid_graph_buttons');edges=[n.next];}
-  else if(n.type==='wait_reply'){if(!Number.isSafeInteger(n.timeout_seconds)||n.timeout_seconds<60||n.timeout_seconds>82800)return invalid('invalid_graph_timeout');edges=[n.on_reply,n.on_timeout];}
+  else if(n.type==='wait_reply'){if(!Number.isSafeInteger(n.timeout_seconds)||n.timeout_seconds<60||n.timeout_seconds>259200)return invalid('invalid_graph_timeout');if(n.deadline_seconds_from_start!==undefined&&(!Number.isSafeInteger(n.deadline_seconds_from_start)||n.deadline_seconds_from_start<60||n.deadline_seconds_from_start>259200))return invalid('invalid_graph_deadline');edges=[n.on_reply,n.on_timeout,...(n.on_timeout_without_window!==undefined?[n.on_timeout_without_window]:[])];}
   else if(n.type==='condition'){if(!['contains','equals'].includes(n.operator)||!text(n.value,200))return invalid('invalid_graph_condition');edges=[n.yes,n.no];}
   else if(n.type==='switch'){
    if(!['equals','contains'].includes(n.operator)||!Array.isArray(n.cases)||n.cases.length<2||n.cases.length>10||n.cases.some(c=>!c||!id(c.id)||!text(c.label,40)||!text(c.value,1000))||new Set(n.cases.map(c=>c.id)).size!==n.cases.length||new Set(n.cases.map(c=>c.value.normalize('NFKC').toUpperCase())).size!==n.cases.length)return invalid('invalid_graph_switch');edges=[...n.cases.map(c=>c.next),n.default];

@@ -1,3 +1,5 @@
+import {campaignSuppressed} from './campaign-opt-out.js';
+import {isOptOut} from './flow-runtime.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {sha} from './identity.js';
 import {billingAccess} from './billing.js';
@@ -12,7 +14,7 @@ async function save(env,row,state,changes={}){
  if(!['running','waiting_reply','delayed'].includes(next.status))await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error=?,completed_at=? WHERE event_id=? AND action_index>=1000 AND status='pending'").bind(next.error||'conversation_completed',Date.now(),row.origin_event_id).run();
 }
 async function release(env,row){await env.DB.prepare('UPDATE conversation_sessions SET lease_id=NULL,lease_until=NULL WHERE id=? AND lease_id=?').bind(row.id,row.lease_id).run();}
-async function eligibility(env,row){const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(row.flow_id).first(),account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();if(!flow?.enabled||flow.version!==row.flow_version||account?.status!=='connected'||account.token_expires_at<=Date.now()/1000||!await billingAccess(env,row.workspace_id))return null;return account;}
+async function eligibility(env,row){const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(row.flow_id).first(),account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();if(await campaignSuppressed(env,row.account_id,row.flow_id,row.recipient_hash))return null;if(!flow?.enabled||flow.version!==row.flow_version||account?.status!=='connected'||account.token_expires_at<=Date.now()/1000||!await billingAccess(env,row.workspace_id))return null;return account;}
 async function drive(env,row,state,deadline){
  const nodes=new Map(state.graph.nodes.map(node=>[node.id,node]));
  for(let count=0;count<35&&Date.now()<deadline;count++){
@@ -20,9 +22,13 @@ async function drive(env,row,state,deadline){
   const node=nodes.get(row.node_id);if(!node){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   if(row.status==='waiting_reply'){
    if(row.due_at>Date.now())return;
-   // A private comment reply does not open the 24-hour messaging window.
-   if(!state.inbound){await save(env,row,state,{status:'completed',error:'no_reply_no_message_window'});return;}
-   await save(env,row,state,{node_id:node.on_timeout,status:'running',step_index:row.step_index+1});continue;
+   if(node.deadline_seconds_from_start!==undefined&&Date.now()>=row.created_at+node.deadline_seconds_from_start*1000){await save(env,row,state,{status:'completed',error:'conversation_deadline_expired'});return;}
+   // Timers may advance control state after 24 hours; they never reopen delivery permission.
+   const hasWindow=state.inbound&&Date.now()-state.inbound.at<86400000&&state.inbound.at<=Date.now()+300000;
+   const withoutWindow=!hasWindow&&node.on_timeout_without_window;
+   if(!state.inbound&&!withoutWindow){await save(env,row,state,{status:'completed',error:'no_reply_no_message_window'});return;}
+   state.afterMessage=false;
+   await save(env,row,state,{node_id:withoutWindow||node.on_timeout,status:'running',step_index:row.step_index+1});continue;
   }
   if(row.status==='delayed'){
    if(row.due_at>Date.now())return;
@@ -35,9 +41,10 @@ async function drive(env,row,state,deadline){
    state.waitingSince=state.afterMessage?state.lastOutboundAt:Date.now();state.waitingInboundAt=state.afterMessage?state.lastMessageInboundAt:(state.inbound?.at||0);state.afterMessage=false;
    // A reply may already be durable while recovering an accepted message's cursor write.
    // Select its original encrypted event, not a later message that merely refreshed the window.
-   const pending=await env.DB.prepare('SELECT e.encrypted_event FROM conversation_inbound i JOIN automation_events e ON e.id=i.event_id WHERE i.conversation_id=? AND e.event_at>=? AND e.event_at>? ORDER BY i.received_at,i.rowid LIMIT 1').bind(row.id,state.waitingSince,state.waitingInboundAt).first();
+   const pending=await env.DB.prepare('SELECT e.encrypted_event FROM conversation_inbound i JOIN automation_events e ON e.id=i.event_id WHERE i.conversation_id=? AND e.event_at>=? AND e.event_at>? AND e.event_at<=? ORDER BY i.received_at,i.rowid LIMIT 1').bind(row.id,state.waitingSince,state.waitingInboundAt,node.deadline_seconds_from_start===undefined?Number.MAX_SAFE_INTEGER:row.created_at+node.deadline_seconds_from_start*1000).first();
    if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;state.replyPayload=reply.payload||null;await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
-   await save(env,row,state,{status:'waiting_reply',due_at:state.waitingSince+node.timeout_seconds*1000});return;
+   const dueAt=Math.min(state.waitingSince+node.timeout_seconds*1000,node.deadline_seconds_from_start===undefined?Infinity:row.created_at+node.deadline_seconds_from_start*1000);
+   await save(env,row,state,{status:'waiting_reply',due_at:dueAt});return;
   }
   if(node.type==='delay'){state.afterMessage=false;await save(env,row,state,{status:'delayed',due_at:Date.now()+node.seconds*1000});return;}
   if(!['message','image','video','buttons'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
@@ -75,24 +82,34 @@ async function drive(env,row,state,deadline){
 export async function startConversation(env,account,flow,event,eventId){
  const c=typeof flow.configuration==='string'?JSON.parse(flow.configuration):flow.configuration;
  if(!validateGraph(c.graph).ok)return'invalid_graph';if(!event.sender_id)return'identity_unavailable';
+ if(isOptOut(c,event)||await campaignSuppressed(env,account.id,flow.id,await sha(event.sender_id)))return'opted_out';
+ const suppressed=await env.DB.prepare("SELECT id FROM conversation_sessions WHERE account_id=? AND flow_id=? AND recipient_hash=? AND error='opted_out' LIMIT 1").bind(account.id,flow.id,await sha(event.sender_id)).first();if(suppressed)return'opted_out';
  const prior=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(eventId).first();if(prior)return'conversation_started';
- const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,sentFirst:false};
+ const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,await sha(event.sender_id),eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
  return inserted.meta.changes?'conversation_started':'conversation_already_active';
 }
 export async function resumeConversation(env,account,event,eventId){
- if(!['dm','story'].includes(event.kind)||!event.sender_id)return false;
+ if(!['comment','dm','story'].includes(event.kind)||!event.sender_id)return false;
  const existing=await env.DB.prepare('SELECT conversation_id FROM conversation_inbound WHERE event_id=?').bind(eventId).first();if(existing)return true;
  const found=await env.DB.prepare(`SELECT id FROM conversation_sessions WHERE account_id=? AND recipient_hash=? AND status IN ${active} ORDER BY created_at LIMIT 1`).bind(account.id,await sha(event.sender_id)).first();if(!found)return false;
  const row=await lock(env,found.id);
  try{
   if(await env.DB.prepare('SELECT event_id FROM conversation_inbound WHERE event_id=?').bind(eventId).first())return true;
   const state=JSON.parse(await decryptToken(row.encrypted_state,env.TOKEN_ENCRYPTION_KEY));
+  if(isOptOut({opt_out_keywords:state.opt_out_keywords||[]},event)){await save(env,row,state,{status:'cancelled',error:'opted_out'});await env.DB.prepare('INSERT OR IGNORE INTO conversation_inbound(event_id,conversation_id,received_at) VALUES(?,?,?)').bind(eventId,row.id,Date.now()).run();return true;}
+  if(event.kind==='comment')return false;
   if(!await eligibility(env,row)){await save(env,row,state,{status:'cancelled',error:'flow_account_or_billing_changed'});return false;}
   if(event.at>Date.now()+300000||Date.now()-event.at>86400000)return true;
   const newer=!state.inbound||event.at>state.inbound.at;
   if(newer)state.inbound=event;
-  const node=state.graph.nodes.find(n=>n.id===row.node_id),advance=row.status==='waiting_reply'&&newer&&event.at>=(state.waitingSince||row.created_at)&&event.at>(state.waitingInboundAt||0);
+  const node=state.graph.nodes.find(n=>n.id===row.node_id);
+  if(row.status==='waiting_reply'&&node.deadline_seconds_from_start!==undefined&&event.at>row.created_at+node.deadline_seconds_from_start*1000){
+   await save(env,row,state,{status:'completed',error:'conversation_deadline_expired'});
+   await env.DB.prepare('INSERT OR IGNORE INTO conversation_inbound(event_id,conversation_id,received_at) VALUES(?,?,?)').bind(eventId,row.id,Date.now()).run();
+   return true;
+  }
+  const advance=row.status==='waiting_reply'&&newer&&event.at>=(state.waitingSince||row.created_at)&&event.at>(state.waitingInboundAt||0);
   // Freeze the answer consumed by this branch. Later DMs can extend the user window,
   // but cannot replace the already selected answer while the graph cursor is running.
   if(advance){state.replyText=event.text;state.replyPayload=event.payload||null;}

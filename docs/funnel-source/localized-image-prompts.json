@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "source": "Original PT FlowNexa campaign assets",
+  "assets": [
+    {
+      "lang": "en",
+      "name": "flownexa-conversa.png",
+      "tool": "built-in image_gen",
+      "mode": "text-localization",
+      "headline": "Your comment can become a conversation.",
+      "subheading": "Reply. Deliver. Continue.",
+      "constraints": "Preserve original layout, FlowNexa logo/wordmark, purple palette, hand, phone and abstract UI. Replace all Portuguese text with exact headline and subheading."
+    },
+    {
+      "lang": "de",
+      "name": "flownexa-conversa.png",
+      "tool": "built-in image_gen",
+      "mode": "text-localization",
+      "headline": "Dein Kommentar kann ein Gespräch werden.",
+      "subheading": "Antworten. Liefern. Weiterreden.",
+      "constraints": "Preserve original layout, FlowNexa logo/wordmark, purple palette, hand, phone and abstract UI. Replace all Portuguese text with exact headline and subheading."
+    },
+    {
+      "lang": "fr",
+      "name": "flownexa-conversa.png",
+      "tool": "built-in image_gen",
+      "mode": "text-localization",
+      "headline": "Un commentaire peut devenir une conversation.",
+      "subheading": "Répondre. Partager. Continuer.",
+      "constraints": "Preserve original layout, FlowNexa logo/wordmark, purple palette, hand, phone and abstract UI. Replace all Portuguese text with exact headline and subheading."
+    },
+    {
+      "lang": "es",
+      "name": "flownexa-conversa.png",
+      "tool": "built-in image_gen",
+      "mode": "text-localization",
+      "headline": "Tu comentario puede convertirse en una conversación.",
+      "subheading": "Responde. Entrega. Continúa.",
+      "constraints": "Preserve original layout, FlowNexa logo/wordmark, purple palette, hand, phone and abstract UI. Replace all Portuguese text with exact headline and subheading."
+    },
+    {
+      "lang": "it",
+      "name": "flownexa-conversa.png",
+      "tool": "built-in image_gen",
+      "mode": "text-localization",
+      "headline": "Il tuo commento può diventare una conversazione.",
+      "subheading": "Rispondi. Consegna. Continua.",
+      "constraints": "Preserve original layout, FlowNexa logo/wordmark, purple palette, hand, phone and abstract UI. Replace all Portuguese text with exact headline and subheading."
+    },
+    {
+      "lang": "en",
+      "name": "flownexa-como-funciona.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa mechanism campaign image. Translate ALL Portuguese text into en, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"From comment to next step.\",\"They reply. Your funnel continues.\",\"Comment\",\"Direct message\",\"Choice\",\"Next step\",\"I’d like to know more!\",\"Hi! 👋 What information would you like?\",\"View plans\",\"Talk to the team\",\"Message…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "en",
+      "name": "flownexa-modelos.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa models campaign image. Translate ALL Portuguese text into en, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Stop starting from scratch.\",\"Ready-made templates. Your own words.\",\"Build your funnel with FlowNexa.\",\"Hi! I’d like to know more. 😀\",\"Perfect! Here’s the resource I prepared for you. 👇\",\"Welcome\",\"Automatic reply\",\"Qualification\",\"Personalized offer\",\"Follow-up\",\"Message…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "de",
+      "name": "flownexa-como-funciona.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa mechanism campaign image. Translate ALL Portuguese text into de, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Vom Kommentar zum nächsten Schritt.\",\"Eine Antwort. Der Funnel geht weiter.\",\"Kommentar\",\"Direktnachricht\",\"Auswahl\",\"Nächster Schritt\",\"Ich möchte mehr erfahren!\",\"Hallo! 👋 Welche Informationen möchtest du erhalten?\",\"Tarife ansehen\",\"Mit dem Team sprechen\",\"Nachricht…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "de",
+      "name": "flownexa-modelos.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa models campaign image. Translate ALL Portuguese text into de, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Nicht immer bei null anfangen.\",\"Fertige Vorlagen. Deine eigenen Worte.\",\"Erstelle deinen Funnel mit FlowNexa.\",\"Hallo! Ich möchte mehr erfahren. 😀\",\"Perfekt! Hier ist das Material für dich. 👇\",\"Begrüßung\",\"Automatische Antwort\",\"Qualifizierung\",\"Persönliches Angebot\",\"Nachfassen\",\"Nachricht…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "fr",
+      "name": "flownexa-como-funciona.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa mechanism campaign image. Translate ALL Portuguese text into fr, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Du commentaire à la prochaine étape.\",\"La personne répond. Le parcours continue.\",\"Commentaire\",\"Message privé\",\"Choix\",\"Prochaine étape\",\"Je veux en savoir plus !\",\"Bonjour ! 👋 Quelles informations souhaites-tu recevoir ?\",\"Voir les offres\",\"Parler à l’équipe\",\"Message…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "fr",
+      "name": "flownexa-modelos.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa models campaign image. Translate ALL Portuguese text into fr, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Ne repars plus de zéro.\",\"Des modèles prêts. Tes propres mots.\",\"Crée ton parcours avec FlowNexa.\",\"Bonjour ! Je veux en savoir plus. 😀\",\"Parfait ! Voici la ressource préparée pour toi. 👇\",\"Bienvenue\",\"Réponse automatique\",\"Qualification\",\"Offre personnalisée\",\"Suivi\",\"Message…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "es",
+      "name": "flownexa-como-funciona.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa mechanism campaign image. Translate ALL Portuguese text into es, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Del comentario al siguiente paso.\",\"La persona responde. El embudo continúa.\",\"Comentario\",\"Mensaje directo\",\"Elección\",\"Siguiente paso\",\"¡Quiero saber más!\",\"¡Hola! 👋 ¿Qué información te gustaría recibir?\",\"Ver planes\",\"Hablar con el equipo\",\"Mensaje…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "es",
+      "name": "flownexa-modelos.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa models campaign image. Translate ALL Portuguese text into es, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Deja de empezar de cero.\",\"Plantillas listas. Tus propias palabras.\",\"Crea tu embudo con FlowNexa.\",\"¡Hola! Quiero saber más. 😀\",\"¡Perfecto! Aquí está el material que preparé para ti. 👇\",\"Bienvenida\",\"Respuesta automática\",\"Calificación\",\"Oferta personalizada\",\"Seguimiento\",\"Mensaje…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "it",
+      "name": "flownexa-como-funciona.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa mechanism campaign image. Translate ALL Portuguese text into it, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Dal commento al prossimo passo.\",\"La persona risponde. Il funnel continua.\",\"Commento\",\"Messaggio diretto\",\"Scelta\",\"Prossimo passo\",\"Vorrei saperne di più!\",\"Ciao! 👋 Quali informazioni vorresti ricevere?\",\"Vedi i piani\",\"Parla con il team\",\"Messaggio…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    },
+    {
+      "lang": "it",
+      "name": "flownexa-modelos.png",
+      "prompt": "Use case: text-localization. Edit target: provided original FlowNexa models campaign image. Translate ALL Portuguese text into it, including every text inside the phone screen, small input placeholder, buttons and node labels. Preserve exact brand logo, FlowNexa wordmark, photographic hand/phone/table, original layout, purple palette and aesthetic. Use the following exact localized strings in the corresponding places, in visual reading order: [\"Smetti di partire da zero.\",\"Modelli pronti. Parole tue.\",\"Crea il tuo funnel con FlowNexa.\",\"Ciao! Vorrei saperne di più. 😀\",\"Perfetto! Ecco il materiale che ho preparato per te. 👇\",\"Benvenuto\",\"Risposta automatica\",\"Qualificazione\",\"Offerta personalizzata\",\"Follow-up\",\"Messaggio…\"]. No Portuguese words may remain. Fit longer localized text elegantly without shrinking to illegibility. Do not add features or claims. Square finished marketing image.",
+      "tool": "built-in image_gen",
+      "mode": "text-localization"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import {processCampaignOptOut,campaignSuppressed} from './campaign-opt-out.js';
 import {startConversation,resumeConversation} from './conversation-runtime.js';
 import {billingAccess} from './billing.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
@@ -27,6 +28,7 @@ async function processEvent(env,row,deadline){
  const event=JSON.parse(await decryptToken(row.encrypted_event,env.TOKEN_ENCRYPTION_KEY));
  const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();
  if(!account||account.status!=='connected')return 'cancelled';
+ if(await processCampaignOptOut(env,account,event,row.id))return 'opted_out';
  if(!await billingAccess(env,account.workspace_id)){await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='billing_subscription_required',completed_at=? WHERE event_id=? AND status='pending'").bind(Date.now(),row.id).run();return 'cancelled';}
  const started=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(row.id).first();if(started)return 'conversation_started';
  if(await resumeConversation(env,account,event,row.id))return 'conversation_resumed';
@@ -59,7 +61,7 @@ async function processEvent(env,row,deadline){
   const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(job.flow_id).first();
   const current=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(account.id).first();
   const subscriptionActive=await billingAccess(env,account.workspace_id);
-  if(!flow?.enabled||flow.version!==job.flow_version||current?.status!=='connected'||!subscriptionActive){
+  if(!flow?.enabled||flow.version!==job.flow_version||current?.status!=='connected'||!subscriptionActive||event.sender_id&&await campaignSuppressed(env,account.id,job.flow_id,await sha(event.sender_id))){
    await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error=?,completed_at=? WHERE id=? AND status='pending'").bind(subscriptionActive?'flow_or_account_changed':'billing_subscription_required',Date.now(),job.id).run();continue;
   }
   // Extend the lease, then reserve this effect before any provider request.
