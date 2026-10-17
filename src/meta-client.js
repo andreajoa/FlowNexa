@@ -2,14 +2,14 @@ import {validOutboundAction} from './conversation-graph.js';
 import {decryptToken} from './instagram-oauth.js';
 export function messagingReady(env){return env.MESSAGING_ENABLED==='true'&&Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET&&env.TOKEN_ENCRYPTION_KEY);}
 export async function metaRequest(env,account,path,{method='GET',body}={}){
- const remaining=env.RUNTIME_DEADLINE_MS?env.RUNTIME_DEADLINE_MS-Date.now()-1500:15000;
+ const remaining=env.RUNTIME_DEADLINE_MS?env.RUNTIME_DEADLINE_MS-Date.now()-1500:30000;
  if(remaining<1000){const error=Error('processing_deferred');error.deferred=true;error.retryable=true;throw error;}
  if(account.status!=='connected'||account.token_expires_at<=Date.now()/1000)throw Error('account_reconnect_required');
  const token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);
  const version=env.META_API_VERSION||'v24.0';if(!/^v\d+\.0$/.test(version))throw Error('invalid_meta_version');
  const url=new URL(`https://graph.instagram.com/${version}/${path}`);
  const headers={'authorization':'Bearer '+token};if(body)headers['content-type']='application/json';
- let response;try{response=await (env.META_FETCH||fetch)(url,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(Math.min(15000,remaining))});}catch(error){error.retryable=method==='GET';throw error;}
+ let response;try{response=await (env.META_FETCH||fetch)(url,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(Math.min(30000,remaining))});}catch(error){error.retryable=method==='GET';throw error;}
  let data;try{data=await response.json();}catch{throw Error(method==='POST'?'delivery_unknown':'meta_invalid_response');}
  if(!response.ok){const error=Error(data?.error?.code===190?'account_reconnect_required':response.status===429?'meta_rate_limited':response.status>=500&&method==='POST'?'delivery_unknown':'meta_request_rejected');error.retryable=response.status===429||response.status>=500&&method==='GET';throw error;}
  return data;
@@ -29,7 +29,7 @@ export async function sendAction(env,account,event,action){
  }else if(action.type!=='public_reply')throw Error('unsupported_action');
  let message={text:action.text};
  if(action.type==='message'&&action.quick_replies)message.quick_replies=action.quick_replies.map(({title,payload})=>({content_type:'text',title,payload}));
- if(['image','video'].includes(action.type))message={attachment:{type:action.type,payload:{url:action.url}}};
+ if(['image','video'].includes(action.type))message={attachment:{type:action.type,payload:{url:action.url,is_reusable:true}}};
  if(action.type==='buttons')message={attachment:{type:'template',payload:{template_type:'generic',elements:[{title:action.text,buttons:action.buttons.map(button=>button.type==='web_url'?{type:'web_url',title:button.title,url:button.url}:{type:'postback',title:button.title,payload:button.payload})}]}}};
  let result;
  try{

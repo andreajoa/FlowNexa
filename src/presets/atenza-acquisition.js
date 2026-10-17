@@ -124,7 +124,7 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
     { id: 'team_copy', type: 'message', text: 'Na Atenza, sua equipe inteira atende usando o mesmo número de WhatsApp numa caixa de entrada compartilhada, com cada conversa atribuída a um responsável e sem ninguém responder por cima.', next: 'demo_offer' },
 
     { id: 'demo_offer', type: 'buttons', text: 'Veja o sistema funcionando ou conheça os planos:', buttons: [
-      link('Ver vídeo (1 min)', demo),
+      postback('Ver o vídeo (1 min)', 'VIDEO'),
       postback('Ver os planos', 'PLANOS'),
       postback('Falar com equipe', 'HUMANO')
     ], next: 'demo_wait' },
@@ -134,6 +134,7 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
       { id: 'p_btn', label: 'Planos', value: 'PLANOS', next: 'plans' },
       { id: 'p_preco', label: 'Preço', value: 'PRECO', next: 'plans' },
       { id: 'h_txt', label: 'Humano', value: 'HUMANO', next: 'delay_humano' },
+      { id: 'v_btn', label: 'Vídeo botão', value: 'VIDEO', next: 'plans_demo_msg' },
       { id: 'v_txt1', label: 'Ver funcionando', value: 'FUNCIONA', next: 'plans_demo_msg' },
       { id: 'v_txt2', label: 'Ver vídeo', value: 'VER', next: 'plans_demo_msg' },
       { id: 'v_txt3', label: 'Demonstração', value: 'DEMO', next: 'plans_demo_msg' }
@@ -209,4 +210,24 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
       graph_layout: layout
     }
   };
+}
+
+export async function syncAtenzaFlow(db) {
+  if (!db) return false;
+  try {
+    const flowId = '5078253c-2cd9-4b76-8174-d3886b6d4016';
+    const flow = await db.prepare('SELECT * FROM flows WHERE id = ?').bind(flowId).first();
+    if (!flow) return false;
+    const configStr = typeof flow.configuration === 'string' ? flow.configuration : JSON.stringify(flow.configuration);
+    if (configStr.includes('plans_video') && configStr.includes('atenza-explica.mp4') && flow.enabled === 1) {
+      return false;
+    }
+    const preset = buildAtenzaMaster();
+    await db.prepare(
+      'UPDATE flows SET configuration = ?, enabled = 1, version = version + 1 WHERE id = ?'
+    ).bind(JSON.stringify(preset.configuration), flowId).run();
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
