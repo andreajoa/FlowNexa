@@ -162,12 +162,8 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
       { id: 'pr_client', label: 'Cliente ativo', value: 'CLIENT', next: 'pos_venda' }
     ], default: 'plans_demo_msg' },
 
-    { id: 'plans_demo_msg', type: 'buttons', text: 'Veja a demonstração de 1 min da Atenza na prática:', buttons: [
-      link('Assistir vídeo', demo),
-      link('Testar 7 dias', signup),
-      link('Comparar planos', pricing)
-    ], next: 'finish' },
-
+    { id: 'plans_demo_msg', type: 'message', text: 'Veja a demonstração de 1 min da Atenza na prática:\n\nAperte o play abaixo para assistir ao vídeo de demonstração 👇', next: 'plans_video' },
+    { id: 'plans_video', type: 'video', url: site + '/media/atenza/atenza-explica.mp4', next: 'finish' },
     { id: 'finish', type: 'end' }
   ];
 
@@ -181,7 +177,7 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
     demo_offer: 'Demonstração ou planos', demo_wait: 'Aguardar decisão', demo_route: 'Encaminhar decisão',
     delay_humano: 'Aviso de transbordo', delay_node: 'Pausa de 60s', retomada_ia: 'Desculpa e Retomada IA',
     plans: 'Planos detalhados', plans_cta: 'Opções de adesão', plans_wait: 'Aguardar após planos', plans_route: 'Roteamento planos',
-    plans_demo_msg: 'Demonstração prática', finish: 'Encerramento'
+    plans_demo_msg: 'Demonstração prática', plans_video: 'Vídeo da demonstração', finish: 'Encerramento'
   };
 
   const positions = {
@@ -193,8 +189,8 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
     ai_copy: [2350, 60], crm_copy: [2350, 360], team_copy: [2350, 660],
     demo_offer: [2680, 360], demo_wait: [3010, 360], demo_route: [3340, 360],
     delay_humano: [3670, 80], delay_node: [4000, 80], retomada_ia: [4330, 80],
-    plans: [3670, 360], plans_cta: [4000, 360], plans_wait: [4330, 360], plans_route: [4660, 360],
-    plans_demo_msg: [4990, 200], finish: [4990, 500]
+    plans: [4330, 380], plans_cta: [4660, 380], plans_wait: [4990, 380], plans_route: [5320, 380],
+    plans_demo_msg: [5320, 100], plans_video: [5650, 100], finish: [5980, 200]
   };
 
   const layout = Object.fromEntries(nodes.map(n => [n.id, { x: positions[n.id][0], y: positions[n.id][1], label: labels[n.id] }]));
