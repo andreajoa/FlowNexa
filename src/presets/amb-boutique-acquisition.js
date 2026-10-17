@@ -5,8 +5,8 @@
 // it explains that operation is 100% online with fulfillment facilities in multiple countries
 // (including the United States, Australia, and the UK) to serve customers faster worldwide,
 // avoiding physical warehouse addresses.
-// Connected with AliExpress Store Manager (https://github.com/andreajoa/aliexpress-store-manager)
-// to track orders, payment, shipping address, inventory, and delivery status in real time.
+// All orders and customer tracking are 100% branded as AMB BOUTIQUE.
+// Sourcing / supplier names (e.g. AliExpress) are strictly banned from customer copy.
 
 export function buildAmbBoutiqueMaster() {
   const site = 'https://www.ambboutique.online';
@@ -114,11 +114,11 @@ export function buildAmbBoutiqueMaster() {
       { id: 'sz_vip', label: 'VIP Perks', value: 'VIP', next: 'customer_vip_upsell' }
     ], default: 'customer_vip_upsell' },
 
-    // 8. Order Lookup & Fulfillment Integration (AliExpress Store Manager)
+    // 8. Order Lookup & Tracking (100% AMB Boutique Branded)
     {
       id: 'order_lookup',
       type: 'message',
-      text: 'Order & Delivery Concierge 📦✨\n\nOur system is connected in real time to our fulfillment and inventory manager (AliExpress Store Manager) which synchronizes all store sales, items bought, payment, shipping address, and live parcel tracking in real time.\n\nTo view your complete order details, carrier updates, and expected delivery date, simply open our live tracker below using your Order ID or checkout email. If you need an exchange or quick address update, our team is right here!',
+      text: 'Order & Delivery Concierge 📦✨\n\nOur system synchronizes your order, payment, shipping address, and live parcel tracking in real time from our fulfillment network directly to your doorstep.\n\nTo view your complete order details, carrier updates, and expected delivery date, simply open our live tracker below using your Order ID or checkout email. If you need an exchange or quick address update, our concierge team is right here!',
       next: 'order_cta'
     },
     {
@@ -181,7 +181,7 @@ export function buildAmbBoutiqueMaster() {
     welcome: 'Welcome AMB', first_wait: 'Wait Reply', reminder: 'Gentle Reminder',
     first_route: 'Intent Router',
     location_info: 'Online Boutique Policy', location_cta: 'Online Actions', location_wait: 'Wait Location', location_route: 'Location Target',
-    order_lookup: 'Order & Fulfillment System', order_cta: 'Order Actions', order_wait: 'Wait Order', order_route: 'Order Target',
+    order_lookup: 'Order & Tracking Portal', order_cta: 'Order Actions', order_wait: 'Wait Order', order_route: 'Order Target',
     size_guide: 'Size Guidance', size_cta: 'Size Actions', size_wait: 'Wait Size', size_route: 'Size Target',
     showcase: 'Featured Showcase', showcase_wait: 'Wait Showcase', showcase_route: 'Showcase Target',
     categories_menu: 'Categories Menu', categories_wait: 'Wait Category', categories_route: 'Category Target',
@@ -233,7 +233,14 @@ export async function syncAmbBoutiqueFlow(db) {
 
     if (flow) {
       const currentConfig = typeof flow.configuration === 'string' ? flow.configuration : JSON.stringify(flow.configuration);
-      if (currentConfig.includes('order_lookup') && currentConfig.includes('customer_vip_upsell') && !currentConfig.includes('San Diego') && flow.enabled === 1) {
+      if (
+        currentConfig.includes('order_lookup') &&
+        currentConfig.includes('customer_vip_upsell') &&
+        !currentConfig.includes('San Diego') &&
+        !currentConfig.includes('AliExpress') &&
+        !currentConfig.includes('aliexpress') &&
+        flow.enabled === 1
+      ) {
         return { ok: true, already: true, flowId: flow.id, version: flow.version, enabled: flow.enabled };
       }
       await db.prepare(
@@ -252,4 +259,5 @@ export async function syncAmbBoutiqueFlow(db) {
     return { error: err.message };
   }
 }
+
 
