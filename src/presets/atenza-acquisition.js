@@ -71,6 +71,9 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
       { id: 'tem_plano_txt2', label: 'Já assinou / pago', value: 'ASSIN', next: 'pos_venda' },
       { id: 'retomada_txt', label: 'Já conhece', value: 'JA', next: 'retomada' },
       { id: 'p_direct', label: 'Preço direto', value: 'PRECO', next: 'plans' },
+      { id: 'p_cust', label: 'Quanto custa', value: 'CUST', next: 'plans' },
+      { id: 'p_contrat', label: 'Como contratar', value: 'CONTRAT', next: 'plans' },
+      { id: 'p_plan', label: 'Planos', value: 'PLAN', next: 'plans' },
       { id: 'd_direct', label: 'Vídeo / Demo', value: 'VIDEO', next: 'plans_demo_msg' },
       { id: 'd_direct2', label: 'Ver funcionando', value: 'FUNCIONA', next: 'plans_demo_msg' },
       { id: 'd_direct3', label: 'Ver vídeo', value: 'VER', next: 'plans_demo_msg' }
@@ -140,12 +143,20 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
       { id: 'v_txt3', label: 'Demonstração', value: 'DEMO', next: 'plans_demo_msg' }
     ], default: 'plans_demo_msg' },
 
-    // Efeito de transbordo realista com delay e retomada total pela IA
-    { id: 'delay_humano', type: 'message', text: 'Em instantes um de nós vai te responder por aqui mesmo 🙂', next: 'delay_node' },
-    { id: 'delay_node', type: 'delay', seconds: 60, next: 'retomada_ia' },
-    { id: 'retomada_ia', type: 'message', text: 'Oi de novo! Tá super corrido por aqui hoje e todos os atendentes estão ocupados agora.\n\nMas eu tenho acesso a todo o sistema da Atenza! Consigo te passar os planos, como criar automações ou tirar dúvidas do seu negócio. Podemos continuar por aqui?', next: 'plans' },
+    // 6. Apresentação em Vídeo com Continuidade Ativa (Sem encerrar a sessão)
+    { id: 'plans_demo_msg', type: 'message', text: 'Veja a demonstração de 1 min da Atenza na prática:\n\nAperte o play abaixo para assistir ao vídeo de demonstração 👇', next: 'plans_video' },
+    { id: 'plans_video', type: 'video', url: site + '/media/atenza/atenza-explica.mp4', next: 'video_wait' },
+    wait('video_wait', 'video_route', 'finish', { timeout_seconds: 86400 }),
 
-    // 6. Planos Transparentes + Continuidade
+    { id: 'video_route', type: 'switch', operator: 'contains', cases: [
+      { id: 'vr_humano', label: 'Falar com equipe', value: 'HUMANO', next: 'delay_humano' },
+      { id: 'vr_equipe', label: 'Atendente', value: 'EQUIPE', next: 'delay_humano' },
+      { id: 'vr_client', label: 'Já sou cliente', value: 'CLIENT', next: 'pos_venda' },
+      { id: 'vr_preco', label: 'Preço ou Contratar', value: 'PRECO', next: 'plans' },
+      { id: 'vr_planos', label: 'Planos', value: 'PLANOS', next: 'plans' }
+    ], default: 'plans' },
+
+    // 7. Planos Transparentes + Continuidade
     { id: 'plans', type: 'message', text: 'Valores da Atenza (mensalidade sem taxa extra por mensagem):\n\n• Essencial — R$ 97: 1 número, até 3 pessoas, IA personalizada, funil e histórico.\n• Pro — R$ 197: até 3 números, até 10 pessoas, follow-up automático e campanhas.\n• Ilimitado — R$ 397: números e equipe sem limite, API e suporte prioritário.\n\n7 dias sem cobrança pra testar. O número não muda e o custo de IA é a preço de custo!', next: 'plans_cta' },
     
     { id: 'plans_cta', type: 'buttons', text: 'Qual o melhor próximo passo pra você?', buttons: [
@@ -157,14 +168,13 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
     wait('plans_wait', 'plans_route', 'finish', { timeout_seconds: 86400 }),
 
     { id: 'plans_route', type: 'switch', operator: 'contains', cases: [
-      { id: 'pr_vid1', label: 'Ver funcionando', value: 'FUNCIONA', next: 'plans_demo_msg' },
-      { id: 'pr_vid2', label: 'Ver vídeo', value: 'VER', next: 'plans_demo_msg' },
-      { id: 'pr_vid3', label: 'Demo', value: 'DEMO', next: 'plans_demo_msg' },
-      { id: 'pr_client', label: 'Cliente ativo', value: 'CLIENT', next: 'pos_venda' }
-    ], default: 'plans_demo_msg' },
+      { id: 'pr_humano', label: 'Falar com equipe', value: 'HUMANO', next: 'delay_humano' },
+      { id: 'pr_client', label: 'Cliente ativo', value: 'CLIENT', next: 'pos_venda' },
+      { id: 'pr_ajuda', label: 'Dúvidas / Suporte', value: 'AJUDA', next: 'delay_humano' }
+    ], default: 'delay_humano' },
 
-    { id: 'plans_demo_msg', type: 'message', text: 'Veja a demonstração de 1 min da Atenza na prática:\n\nAperte o play abaixo para assistir ao vídeo de demonstração 👇', next: 'plans_video' },
-    { id: 'plans_video', type: 'video', url: site + '/media/atenza/atenza-explica.mp4', next: 'finish' },
+    // 8. Equipe humana e finalização
+    { id: 'delay_humano', type: 'message', text: 'Combinado! Notifiquei nossa equipe e um de nós vai te responder por aqui em instantes 🙂\n\nEnquanto isso, se já quiser criar sua conta e testar por 7 dias grátis, é só acessar https://www.atenza.online/signup', next: 'finish' },
     { id: 'finish', type: 'end' }
   ];
 
@@ -176,9 +186,10 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
     hook: 'Prévia da tela', menu: 'Desafio atual', menu_wait: 'Aguardar resposta', menu_route: 'Roteamento semântico',
     ai_copy: 'Explicação IA', crm_copy: 'Explicação CRM', team_copy: 'Multiatendimento',
     demo_offer: 'Demonstração ou planos', demo_wait: 'Aguardar decisão', demo_route: 'Encaminhar decisão',
-    delay_humano: 'Aviso de transbordo', delay_node: 'Pausa de 60s', retomada_ia: 'Desculpa e Retomada IA',
+    plans_demo_msg: 'Demonstração prática', plans_video: 'Vídeo da demonstração',
+    video_wait: 'Aguardar após vídeo', video_route: 'Intenção pós-vídeo',
     plans: 'Planos detalhados', plans_cta: 'Opções de adesão', plans_wait: 'Aguardar após planos', plans_route: 'Roteamento planos',
-    plans_demo_msg: 'Demonstração prática', plans_video: 'Vídeo da demonstração', finish: 'Encerramento'
+    delay_humano: 'Aviso da equipe', finish: 'Encerramento'
   };
 
   const positions = {
@@ -189,9 +200,9 @@ export function buildAtenzaMaster({assetBase = "https://flownex.online/assets/fu
     hook: [1030, 320], menu: [1360, 320], menu_wait: [1690, 320], menu_route: [2020, 320],
     ai_copy: [2350, 60], crm_copy: [2350, 360], team_copy: [2350, 660],
     demo_offer: [2680, 360], demo_wait: [3010, 360], demo_route: [3340, 360],
-    delay_humano: [3670, 80], delay_node: [4000, 80], retomada_ia: [4330, 80],
-    plans: [4330, 380], plans_cta: [4660, 380], plans_wait: [4990, 380], plans_route: [5320, 380],
-    plans_demo_msg: [5320, 100], plans_video: [5650, 100], finish: [5980, 200]
+    plans_demo_msg: [3670, 200], plans_video: [4000, 200], video_wait: [4330, 200], video_route: [4660, 200],
+    plans: [4990, 380], plans_cta: [5320, 380], plans_wait: [5650, 380], plans_route: [5980, 380],
+    delay_humano: [5320, 100], finish: [6310, 250]
   };
 
   const layout = Object.fromEntries(nodes.map(n => [n.id, { x: positions[n.id][0], y: positions[n.id][1], label: labels[n.id] }]));
@@ -219,7 +230,7 @@ export async function syncAtenzaFlow(db) {
     const flow = await db.prepare('SELECT id, version, enabled, configuration FROM flows WHERE id = ?').bind(flowId).first();
     if (!flow) return { error: 'flow_not_found' };
     const configStr = typeof flow.configuration === 'string' ? flow.configuration : JSON.stringify(flow.configuration);
-    if (configStr.includes('plans_video') && configStr.includes('atenza-explica.mp4') && flow.enabled === 1) {
+    if (configStr.includes('video_wait') && configStr.includes('video_route') && flow.enabled === 1) {
       return { ok: true, already: true, version: flow.version, enabled: flow.enabled };
     }
     const preset = buildAtenzaMaster();

@@ -29,7 +29,7 @@ export async function sendAction(env,account,event,action){
  }else if(action.type!=='public_reply')throw Error('unsupported_action');
  let message={text:action.text};
  if(action.type==='message'&&action.quick_replies)message.quick_replies=action.quick_replies.map(({title,payload})=>({content_type:'text',title,payload}));
- if(['image','video'].includes(action.type))message={attachment:{type:action.type,payload:{url:action.url,is_reusable:true}}};
+ if(['image','video'].includes(action.type))message={attachment:{type:action.type,payload:{url:action.url}}};
  if(action.type==='buttons')message={attachment:{type:'template',payload:{template_type:'generic',elements:[{title:action.text,buttons:action.buttons.map(button=>button.type==='web_url'?{type:'web_url',title:button.title,url:button.url}:{type:'postback',title:button.title,payload:button.payload})}]}}};
  let result;
  try{
