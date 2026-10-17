@@ -10,6 +10,7 @@ import {runtimeApi} from './runtime-api.js';
 import {enqueueWebhook,processPending} from './automation-engine.js';
 import {respond as json,sha} from './identity.js';
 import {messagingReady} from './meta-client.js';
+import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
 export const TEMPLATES=[{id:'comment-link',name:'Comentou QUERO',trigger_type:'comment_keyword',scope:'selected',configuration:{keywords:['QUERO'],actions:[{type:'private_reply',text:'Aqui está o link solicitado.'}]}}];
 export function keywordMatch(content,words){const text=String(content||'').normalize('NFKC').toLocaleUpperCase('pt-BR');return Array.isArray(words)&&words.some(w=>String(w).trim()&&text.includes(String(w).normalize('NFKC').toLocaleUpperCase('pt-BR')))}
 export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==='selected'&&Array.isArray(selected)&&selected.includes(mediaId)}
@@ -42,6 +43,8 @@ export default {async fetch(request,env,ctx={}){
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);
  if(path.startsWith('/api/auth/')||path==='/api/workspaces'||path==='/api/accounts')return accountApi(request,env);
+ if(path.startsWith('/api/v1/agent/'))return agentRuntimeApi(request,env);
+ if(path==='/api/agent-tokens'||path.startsWith('/api/agent-tokens/'))return agentTokensApi(request,env);
  if(path==='/api/flows'||path.startsWith('/api/flows/')||path.startsWith('/api/accounts/')||path==='/api/executions')return runtimeApi(request,env);
  if(path==='/api/templates'&&request.method==='GET')return json({templates:TEMPLATES});
  if(path==='/webhooks/instagram'&&request.method==='GET'){

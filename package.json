@@ -2,6 +2,9 @@
   "name": "flownexa",
   "private": true,
   "type": "module",
+  "bin": {
+    "flownexa-mcp": "./bin/flownexa-mcp.js"
+  },
   "scripts": {
     "dev": "npx --yes vercel@63.1.2 dev",
     "test": "node --test",
