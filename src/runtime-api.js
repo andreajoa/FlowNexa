@@ -35,7 +35,7 @@ export async function runtimeApi(request,env){
     await env.DB.prepare('UPDATE flows SET name=?,trigger_type=?,scope=?,configuration=?,enabled=0,version=version+1 WHERE id=?').bind(name.trim(),trigger,scope,JSON.stringify(config),flow.id).run();return J({flow:await env.DB.prepare('SELECT * FROM flows WHERE id=?').bind(flow.id).first()});
    }
    if(request.method==='POST'&&f[2]==='simulate'){
-    const b=await payload(request);const kind=(b.trigger_type||flow.trigger_type).startsWith('comment')?'comment':(b.trigger_type||flow.trigger_type)==='story_reply'?'story':'dm';return J(matchFlow(flow,{kind,text:typeof b.text==='string'?b.text:'',media_id:b.media_id||''}));
+    const b=await payload(request);const kind=typeof b.kind==='string'&&['dm','story','comment'].includes(b.kind)?b.kind:(JSON.parse(flow.configuration).entry_points?.[0]||((b.trigger_type||flow.trigger_type).startsWith('comment')?'comment':(b.trigger_type||flow.trigger_type)==='story_reply'?'story':'dm'));return J(matchFlow(flow,{kind,text:typeof b.text==='string'?b.text:'',media_id:b.media_id||''}));
    }
    if(request.method==='POST'&&['publish','pause'].includes(f[2])){
     if(f[2]==='publish'){

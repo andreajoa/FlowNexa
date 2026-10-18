@@ -109,8 +109,9 @@ export async function startConversation(env,account,flow,event,eventId){
  const recipient=await sha(event.sender_id);
  const priorSession=await env.DB.prepare("SELECT id,node_id,status,encrypted_state,updated_at FROM conversation_sessions WHERE account_id=? AND recipient_hash=? ORDER BY updated_at DESC LIMIT 1").bind(account.id,recipient).first();
  const isReturning=Boolean(priorSession);
- const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
+ const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,replyPerMessage:c.reply_per_message===true,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,recipient,eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
+ if(!inserted.meta.changes&&c.reply_per_message){const error=Error('conversation_busy');error.deferred=true;throw error;}
  return inserted.meta.changes?'conversation_started':'conversation_already_active';
 }
 export async function resumeConversation(env,account,event,eventId){
@@ -122,6 +123,8 @@ export async function resumeConversation(env,account,event,eventId){
   if(await env.DB.prepare('SELECT event_id FROM conversation_inbound WHERE event_id=?').bind(eventId).first())return true;
   const state=JSON.parse(await decryptToken(row.encrypted_state,env.TOKEN_ENCRYPTION_KEY));
   if(isOptOut({opt_out_keywords:state.opt_out_keywords||[]},event)){await save(env,row,state,{status:'cancelled',error:'opted_out'});await env.DB.prepare('INSERT OR IGNORE INTO conversation_inbound(event_id,conversation_id,received_at) VALUES(?,?,?)').bind(eventId,row.id,Date.now()).run();return true;}
+  // Independent replies stay durable until the prior send finishes; never swallow a second DM.
+  if(state.replyPerMessage){const error=Error('conversation_busy');error.deferred=true;throw error;}
   if(event.kind==='comment')return false;
   if(!await eligibility(env,row)){await save(env,row,state,{status:'cancelled',error:'flow_account_or_billing_changed'});return false;}
   if(event.at>Date.now()+300000||Date.now()-event.at>86400000)return true;

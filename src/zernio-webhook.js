@@ -18,10 +18,11 @@ export function normalizeZernio(body,account){
   const at=Date.parse(m.sentAt);if(!Number.isFinite(at)||at<=0)return [];
   const payload=metadata.postback?.payload??metadata.quick_reply?.payload??metadata.quickReply?.payload??metadata.postbackPayload??metadata.quickReplyPayload;
   if(payload!==undefined&&(typeof payload!=='string'||!payload.trim()||payload.length>1000))return [];
-  if(typeof m.text!=='string'&&payload===undefined||typeof m.text==='string'&&m.text.length>8000)return [];
+  const hasAttachment=Array.isArray(m.attachments)&&m.attachments.some(a=>a&&typeof a.type==='string'&&['image','video','audio','file','share','story','reel'].includes(a.type));
+  if(typeof m.text!=='string'&&payload===undefined&&!hasAttachment||typeof m.text==='string'&&m.text.length>8000)return [];
   // The signed event's platform time opens the window, never the delivery timestamp.
   const story=metadata.reply_to?.story||metadata.replyTo?.story;
-  return [{...base,key:'zernio:message:'+m.platformMessageId,kind:story?'story':'dm',sender_id:m.sender.id,text:m.text||'',conversation_id:conversation,at,...(payload!==undefined?{payload,interaction:'postback'}:{})}];
+  return [{...base,key:'zernio:message:'+m.platformMessageId,kind:story?'story':'dm',sender_id:m.sender.id,text:m.text||'',conversation_id:conversation,at,...(payload!==undefined?{payload,interaction:'postback'}:hasAttachment&&!m.text?{interaction:'attachment'}:{})}];
  }
  return [];
 }
