@@ -84,3 +84,9 @@ test('provider failures emit only safe stage metadata with a support reference',
  const{env,callback}=await setup(t);const logs=[],fetcher=env.META_FETCH;env.OAUTH_LOG=line=>logs.push(JSON.parse(line));env.META_FETCH=(u,o)=>new URL(u).pathname==='/v24.0/me'?Promise.resolve(Response.json({error:{code:100,error_subcode:33,fbtrace_id:'safe-trace-123',message:'Unsupported request - method type: get secret long-token app-secret'}},{status:400})):fetcher(u,o);
  const r=await callback(),data=await r.json();assert.equal(data.error,'instagram_profile_failed');assert.equal(logs.length,1);assert.equal(logs[0].reference,data.reference);assert.equal(logs[0].step,'profile');assert.equal(logs[0].provider_code,100);assert.equal(logs[0].unsupported_get,true);assert.doesNotMatch(JSON.stringify(logs),/long-token|app-secret|access_token|https:/);
 });
+
+test('exchange rejection with real Meta code100 is classified without reaching profile',async t=>{
+ const{env,db,callback,calls}=await setup(t);const fetcher=env.META_FETCH,logs=[];env.OAUTH_LOG=line=>logs.push(JSON.parse(line));
+ env.META_FETCH=(url,options)=>new URL(url).pathname==='/access_token'?Promise.resolve(Response.json({error:{message:'Unsupported request - method type: get',type:'IGApiException',code:100,fbtrace_id:'trace-fixture'}},{status:400})):fetcher(url,options);
+ const result=await callback();assert.equal(result.status,502);assert.equal((await result.json()).error,'long_token_exchange_failed');assert.equal(logs[0].provider_code,100);assert.equal(logs[0].step,'long_token_exchange');assert.equal(logs[0].unsupported_get,true);assert.equal((await db.prepare('SELECT count(*) n FROM instagram_accounts').first()).n,0);
+});

@@ -82,3 +82,11 @@ Um deploy temporário com ambiente de produção, domínio principal preservado,
 - Nenhum envio real, alteração de conta ou chamada de assinatura foi executado pelo diagnóstico. O diagnóstico é temporário e não faz parte do código final.
 
 O segundo teste de navegador (`scripts/browser-rich-smoke.mjs`) também passou: 3 verificações de caminhos com imagem, vídeo, botões e deduplicação, com 8 envios simulados e zero envios reais.
+
+## Nova tentativa real — referência b9899f2a-a783-4d64-b2bf-4193a1178ece
+
+A referência fornecida pelo proprietário foi localizada nos logs do deploy publicado. O registro confirma `step=long_token_exchange`, HTTP 400, código Meta 100, `unsupported_get=true` e trace `AGrInfUGPD5T3kCiVzx7p1_`. A autorização inicial e a validação da resposta do token curto foram ultrapassadas; a consulta de perfil e a persistência da conta não foram alcançadas.
+
+O proprietário informou que possui seis contas, incluindo as duas já conectadas e `gilberto.rebuild`. A propriedade comum não comprova que cada perfil tenha papel de teste aceito nem que o app tenha Advanced Access para contas externas. Conferir esses estados no aplicativo pai `2210386389506759` antes de atribuir o erro exclusivamente ao método HTTP, à senha ou ao tipo profissional do perfil. A sessão de navegador disponível redirecionou ao login da Meta, portanto o estado de aprovação não foi inspecionado nem declarado como conhecido.
+
+Foi adicionada uma regressão que reproduz o retorno real de código 100 e verifica que a falha é registrada na etapa correta, sem gravar uma conexão fictícia. Nenhuma troca especulativa de método ou mudança de permissões foi publicada nessa investigação. O próximo passo depende da verificação do acesso do aplicativo na Meta.
