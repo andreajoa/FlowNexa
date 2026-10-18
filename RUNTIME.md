@@ -52,3 +52,7 @@ The first actual provider webhook requests returned403. The signing configuratio
 ## Instagram audit (2026-10-18)
 
 See [the connection audit](docs/INSTAGRAM-CONNECTION-AUDIT.md) for findings, fixes, regression evidence and external Meta access requirements. Public `/api/health` is an availability-only read and never returns accounts or maintains presets; health probes, webhooks and scheduler ticks never auto-install or reactivate customer presets. Existing flows retain their saved configuration and paused/published state.
+
+## Zernio Instagram connections
+
+With `INSTAGRAM_CONNECTION_PROVIDER=zernio`, new connections use server-only `ZERNIO_API_KEY` and `ZERNIO_WEBHOOK_SECRET`. Configure the signed webhook at `/webhooks/zernio` for `comment.received`, `message.received`, and `account.disconnected`. Existing Meta accounts retain their original transport. Zernio manages platform tokens: local Zernio accounts intentionally have no encrypted Meta token or invented expiry. The per-account transport and readiness checks distinguish them. The connection handler bootstraps three additive provider tables at the first authorized connect; it does not alter existing schemas. See [Zernio integration](docs/ZERNIO-INSTAGRAM.md) for tenant isolation, lifecycle, delivery semantics and live validation requirements.

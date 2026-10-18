@@ -6,7 +6,10 @@ import {sha} from './identity.js';
 import {matchFlow,normalizeWebhook} from './flow-runtime.js';
 import {sendAction,messagingReady} from './meta-client.js';
 export async function enqueueWebhook(body,env){
- const events=normalizeWebhook(body);let queued=0;
+ return enqueueEvents(normalizeWebhook(body),env);
+}
+export async function enqueueEvents(events,env){
+ let queued=0;
  // Meta can aggregate up to 1000 updates. Reject larger envelopes before writing.
  if(events.length>1000)throw Error('webhook_batch_too_large');
  const accounts=new Map(),statements=[];

@@ -1,3 +1,4 @@
+import {accountUsable} from './zernio-client.js';
 import {campaignSuppressed} from './campaign-opt-out.js';
 import {isOptOut} from './flow-runtime.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
@@ -14,7 +15,7 @@ async function save(env,row,state,changes={}){
  if(!['running','waiting_reply','delayed'].includes(next.status))await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error=?,completed_at=? WHERE event_id=? AND action_index>=1000 AND status='pending'").bind(next.error||'conversation_completed',Date.now(),row.origin_event_id).run();
 }
 async function release(env,row){await env.DB.prepare('UPDATE conversation_sessions SET lease_id=NULL,lease_until=NULL WHERE id=? AND lease_id=?').bind(row.id,row.lease_id).run();}
-async function eligibility(env,row){const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(row.flow_id).first(),account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();if(await campaignSuppressed(env,row.account_id,row.flow_id,row.recipient_hash))return null;if(!flow?.enabled||flow.version!==row.flow_version||account?.status!=='connected'||account.token_expires_at<=Date.now()/1000||!await billingAccess(env,row.workspace_id))return null;return account;}
+async function eligibility(env,row){const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(row.flow_id).first(),account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();if(await campaignSuppressed(env,row.account_id,row.flow_id,row.recipient_hash))return null;if(!flow?.enabled||flow.version!==row.flow_version||!accountUsable(account)||!await billingAccess(env,row.workspace_id))return null;return account;}
 async function drive(env,row,state,deadline){
  const nodes=new Map(state.graph.nodes.map(node=>[node.id,node]));
  for(let count=0;count<35&&Date.now()<deadline;count++){

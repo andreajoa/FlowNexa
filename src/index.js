@@ -1,3 +1,5 @@
+import {zernioConnection} from './zernio-connection.js';
+import {zernioWebhook} from './zernio-webhook.js';
 import {processConversations} from './conversation-runtime.js';
 import {billingApi,stripeWebhook} from './billing.js';
 import {refreshAccounts,deauthorize} from './account-lifecycle.js';
@@ -41,6 +43,8 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
+ if(path==='/webhooks/zernio')return zernioWebhook(request,env);
+ if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio')return zernioConnection(request,env);
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);
  if(path.startsWith('/api/auth/')||path==='/api/workspaces'||path==='/api/accounts')return accountApi(request,env);

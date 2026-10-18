@@ -1,3 +1,4 @@
+import {accountUsable} from './zernio-client.js';
 import {respond as J, sha, nowSeconds, getSessionUser, requireMembership, payload, sameOrigin} from './identity.js';
 import {validateGraph} from './conversation-graph.js';
 import {validateFlow} from './flow-runtime.js';
@@ -261,9 +262,10 @@ export async function agentRuntimeApi(request, env) {
    const account = await env.DB.prepare(
     'SELECT * FROM instagram_accounts WHERE id = ?'
    ).bind(flow.account_id).first();
-   if (!account || account.status !== 'connected' || account.token_expires_at < Date.now() / 1000) {
+   if (!accountUsable(account)) {
     return J({error: 'account_reconnect_required'}, 409);
    }
+   if (!messagingReady(env, account)) return J({error: 'messaging_not_configured'}, 503);
    let config = {};
    try { config = JSON.parse(flow.configuration); } catch {}
    const valid = validateFlow(flow.trigger_type, flow.scope, config);

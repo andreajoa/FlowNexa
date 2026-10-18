@@ -1,3 +1,4 @@
+import {isZernioAccount,accountUsable,zernioMedia,zernioRequest,zernioAccountId} from './zernio-client.js';
 import {billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,respond as J,sameOrigin,payload} from './identity.js';
 import {validateFlow,matchFlow} from './flow-runtime.js';
@@ -40,7 +41,7 @@ export async function runtimeApi(request,env){
     if(f[2]==='publish'){
      if(!await billingAccess(env,flow.workspace_id))return J({error:'billing_subscription_required'},402);
      if(!messagingReady(env))return J({error:'messaging_not_configured'},503);
-     const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(flow.account_id).first();if(!account||account.status!=='connected'||account.token_expires_at<Date.now()/1000)return J({error:'account_reconnect_required'},409);
+     const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(flow.account_id).first();if(!accountUsable(account))return J({error:'account_reconnect_required'},409);if(!messagingReady(env,account))return J({error:'messaging_not_configured'},503);
      const valid=validateFlow(flow.trigger_type,flow.scope,JSON.parse(flow.configuration));if(!valid.ok)return J({error:valid.error},400);
     }
     await env.DB.prepare('UPDATE flows SET enabled=?,version=version+1 WHERE id=?').bind(f[2]==='publish'?1:0,flow.id).run();return J({flow:await env.DB.prepare('SELECT * FROM flows WHERE id=?').bind(flow.id).first()});
@@ -49,11 +50,12 @@ export async function runtimeApi(request,env){
   const a=path.match(/^\/api\/accounts\/([^/]+)\/(media|disconnect)$/);
   if(a){
    const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(a[1]).first();if(!account||!await requireMembership(env.DB,user.id,account.workspace_id,a[2]==='disconnect'?['owner','admin']:undefined))return J({error:'not_found'},404);
-   if(a[2]==='media'&&request.method==='GET'){const data=await metaRequest(env,account,`${account.ig_user_id}/media?fields=id,caption,media_type,permalink,thumbnail_url,media_url&limit=50`);return J({media:Array.isArray(data.data)?data.data:[]});}
+   if(a[2]==='media'&&request.method==='GET'){const data=isZernioAccount(account)?{data:await zernioMedia(env,account)}:await metaRequest(env,account,`${account.ig_user_id}/media?fields=id,caption,media_type,permalink,thumbnail_url,media_url&limit=50`);return J({media:Array.isArray(data.data)?data.data:[]});}
    if(a[2]==='disconnect'&&request.method==='POST'){
     // Disable locally first, even if the provider is temporarily unreachable.
     await env.DB.batch([env.DB.prepare('UPDATE flows SET enabled=0,version=version+1 WHERE account_id=?').bind(account.id),env.DB.prepare("UPDATE instagram_accounts SET status='disconnected',encrypted_token=NULL,token_expires_at=NULL WHERE id=?").bind(account.id)]);
-    try{await metaRequest(env,account,'me/subscribed_apps',{method:'DELETE'});}catch{}
+    let provider_disconnected=true;try{if(isZernioAccount(account))await zernioRequest(env,'accounts/'+zernioAccountId(account),{method:'DELETE'});else await metaRequest(env,account,'me/subscribed_apps',{method:'DELETE'});}catch{provider_disconnected=false;}
+    if(!provider_disconnected)return J({ok:true,provider_disconnected:false},202);
     return J({ok:true});
    }
   }
@@ -62,5 +64,5 @@ export async function runtimeApi(request,env){
    const rows=await env.DB.prepare('SELECT j.id,j.flow_id,f.name AS flow_name,j.status,j.error,j.provider_id,j.action_type,j.attempt_at,j.completed_at FROM automation_jobs j JOIN flows f ON f.id=j.flow_id WHERE j.workspace_id=? ORDER BY j.rowid DESC LIMIT 100').bind(workspace).all();return J({executions:rows.results});
   }
   return J({error:'not_found'},404);
- }catch(error){if(error.status)return J({error:error.message},error.status);if(error instanceof SyntaxError)return J({error:'invalid_payload'},400);return J({error:['account_reconnect_required','meta_rate_limited','meta_request_rejected'].includes(error.message)?error.message:'request_failed'},502);}
+ }catch(error){if(error.status)return J({error:error.message},error.status);if(error instanceof SyntaxError)return J({error:'invalid_payload'},400);return J({error:['account_reconnect_required','meta_rate_limited','meta_request_rejected','zernio_request_rejected','zernio_unavailable'].includes(error.message)?error.message:'request_failed'},502);}
 }

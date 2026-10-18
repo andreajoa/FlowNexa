@@ -1,7 +1,9 @@
+import {isZernioAccount,accountUsable,zernioSend} from './zernio-client.js';
 import {validOutboundAction} from './conversation-graph.js';
 import {decryptToken} from './instagram-oauth.js';
-export function messagingReady(env){return env.MESSAGING_ENABLED==='true'&&Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET&&env.TOKEN_ENCRYPTION_KEY);}
+export function messagingReady(env,account){const meta=Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),zernio=Boolean(env.ZERNIO_API_KEY&&env.ZERNIO_WEBHOOK_SECRET);return env.MESSAGING_ENABLED==='true'&&Boolean(env.TOKEN_ENCRYPTION_KEY)&&(account?(isZernioAccount(account)?zernio:meta):(meta||zernio));}
 export async function metaRequest(env,account,path,{method='GET',body}={}){
+ if(isZernioAccount(account))throw Error('wrong_account_provider');
  const remaining=env.RUNTIME_DEADLINE_MS?env.RUNTIME_DEADLINE_MS-Date.now()-1500:30000;
  if(remaining<1000){const error=Error('processing_deferred');error.deferred=true;error.retryable=true;throw error;}
  if(account.status!=='connected'||account.token_expires_at<=Date.now()/1000)throw Error('account_reconnect_required');
@@ -15,8 +17,10 @@ export async function metaRequest(env,account,path,{method='GET',body}={}){
  return data;
 }
 export async function sendAction(env,account,event,action){
- if(!messagingReady(env))throw Error('messaging_disabled');
+ if(!messagingReady(env,account))throw Error('messaging_disabled');
  if(!validOutboundAction(action))throw Error('unsupported_action');
+ if(!accountUsable(account))throw Error('account_reconnect_required');
+ if(isZernioAccount(account))return zernioSend(env,account,event,action);
  const age=Date.now()-event.at;if(age< -300000)throw Error('event_time_invalid');
  if(action.type==='private_reply'){
   if(event.kind!=='comment'||!/^\d+$/.test(event.comment_id||''))throw Error('invalid_comment');
