@@ -11,8 +11,6 @@ import {enqueueWebhook,processPending} from './automation-engine.js';
 import {respond as json,sha} from './identity.js';
 import {messagingReady} from './meta-client.js';
 import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
-import {syncAtenzaFlow} from './presets/atenza-acquisition.js';
-import {syncAmbBoutiqueFlow} from './presets/amb-boutique-acquisition.js';
 export const TEMPLATES=[{id:'comment-link',name:'Comentou QUERO',trigger_type:'comment_keyword',scope:'selected',configuration:{keywords:['QUERO'],actions:[{type:'private_reply',text:'Aqui está o link solicitado.'}]}}];
 export function keywordMatch(content,words){const text=String(content||'').normalize('NFKC').toLocaleUpperCase('pt-BR');return Array.isArray(words)&&words.some(w=>String(w).trim()&&text.includes(String(w).normalize('NFKC').toLocaleUpperCase('pt-BR')))}
 export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==='selected'&&Array.isArray(selected)&&selected.includes(mediaId)}
@@ -34,15 +32,8 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/api/health'&&request.method==='GET'){
   if(!env.DB)return json({status:'degraded',database:false},503);
-  let atenzaUpdated=false,ambUpdated=false;
-  try{atenzaUpdated=await syncAtenzaFlow(env.DB);}catch{}
-  try{ambUpdated=await syncAmbBoutiqueFlow(env.DB);}catch{}
-  let accounts=[];
-  try{
-   const rows=await env.DB.prepare('SELECT username, status FROM instagram_accounts').all();
-   accounts=rows.results||[];
-  }catch{}
-  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),atenzaUpdated,ambUpdated,accounts});}catch{return json({status:'degraded',database:false},503);}
+  // Public availability checks must not expose tenants or change their automations.
+  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa'});}catch{return json({status:'degraded',database:false},503);}
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
@@ -67,7 +58,7 @@ export default {async fetch(request,env,ctx={}){
   if(!await verifySignature(body,request.headers.get('x-hub-signature-256'),env.META_WEBHOOK_SECRET))return json({error:'invalid_signature'},403);
   if(!env.DB||!env.TOKEN_ENCRYPTION_KEY)return json({error:'database_unavailable'},503);
   let parsed;try{parsed=JSON.parse(new TextDecoder().decode(body));}catch{return json({error:'invalid_payload'},400);}
-  try{if(env.DB)await syncAtenzaFlow(env.DB);const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processQueue(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}
+  try{const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processQueue(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}
  }
  return json({error:'not_found'},404);
 }};
