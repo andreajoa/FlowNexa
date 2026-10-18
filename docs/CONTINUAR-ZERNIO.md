@@ -10,10 +10,10 @@ Conectar Instagram de clientes ao FlowNexa, começando por gilberto.rebuild. Pro
 
 - Worktree de trabalho: `/Users/andrealmeida/flownexa-instagram-audit`, branch `fix/instagram-profile-connection`.
 - PR existente https://github.com/andreajoa/FlowNexa/pull/15 . Integração commitada e enviada em `2965da9` (commit anterior: `79b1f23`).
-- Produção ainda no código `91267b3`, domínio `https://flownex.online`. **Zernio ainda não publicada no momento deste registro.**
+- Produção atualizada para `087d5a8` (código de integração `2965da9`), domínio `https://flownex.online`. Deployment `dpl_Ct5KpZfp6ytNJUbNNwRypf9a1vvW`, URL `https://flownexa-ilyes5qot-flownexa3.vercel.app`, promovido com sucesso. Health HTTP 200; callback Zernio sem sessão retorna 401; webhook GET retorna 405.
 - Projeto Vercel `flownexa3/flownexa`, project `prj_DWVerljQapY4ZRnHI93CRAhI4kTS`, team `team_RpoiNmmSvkiuCGlBgP8WyAdI`. Link `.vercel/project.json` já copiado, ignorado no git.
 - ZERNIO_API_KEY e ZERNIO_WEBHOOK_SECRET guardados como segredos Production na Vercel; INSTAGRAM_CONNECTION_PROVIDER=zernio guardado como Config Production. Não imprimir, exportar ou recriar esses valores. Um segredo já foi gerado; NÃO gerar outro sem alinhar o webhook remoto.
-- Zernio consultada: perfil Default e zero contas; nenhum webhook registrado ainda. A API usa https://zernio.com/api/v1/ .
+- Zernio inicialmente consultada: perfil Default e zero contas. Webhook Production registrado e ativo: `6ad50e963b4b31b29df7bfe4`, três eventos configurados. Teste real POST /v1/webhooks/test retornou HTTP 200, success=true. Conta Instagram ainda não conectada. A API usa https://zernio.com/api/v1/ .
 
 ## Alterações locais ainda em andamento
 
@@ -35,9 +35,9 @@ Provider separado por identificador interno `zernio:<remoteId>`, sem fingir toke
 1. Conferir testes em andamento e resolver falhas reais. Revisar nova integração; garantir isolamento, webhook real e preservar conexões Meta.
 2. Concluir validação de navegador, incluindo novo fluxo Zernio. Acrescentar prova de login por botão se necessário.
 3. Commitar, enviar branch e atualizar PR em torno da integração final.
-4. Preparar deploy de produção sem domínio (`vercel deploy --prod --skip-domain`) no projeto/equipe confirmados. Inspecionar, depois promover para domínio canônico. Nenhuma nova liberação foi feita ainda.
-5. Registrar webhook remoto `https://flownex.online/webhooks/zernio` com mesmo ZERNIO_WEBHOOK_SECRET já salvo, eventos comment.received, message.received, account.disconnected. Secret pode ser usado por processo autenticado mas não deve ser exibido.
-6. Testar webhook pelo endpoint Zernio de teste; amostras devem dar 200 sem disparar automações. Nenhuma mensagem Instagram real sem confirmação específica do teste.
+4. Deploy, inspeção, health e promoção já concluídos para o domínio canônico. Primeiro deploy foi bloqueado por autor Git não associado. Corrigida a atribuição futura para o noreply da conta GitHub autenticada andreajoa, confirmada pela API; nenhum commit antigo foi reescrito nem permissão da equipe alterada.
+5. CONCLUÍDO: registrar webhook remoto `https://flownex.online/webhooks/zernio` com mesmo ZERNIO_WEBHOOK_SECRET já salvo, eventos comment.received, message.received, account.disconnected. Secret pode ser usado por processo autenticado mas não deve ser exibido.
+6. CONCLUÍDO com HTTP 200/success=true: testar webhook pelo endpoint Zernio de teste; amostras devem dar 200 sem disparar automações. Nenhuma mensagem Instagram real sem confirmação específica do teste.
 7. Validar botão Conectar Instagram em sessão FlowNexa do Chrome do usuário; deixar login de gilberto.rebuild para o proprietário quando houver senha/consentimento. Confirmar conta local apenas após callback real válido. Não declarar conta conectada só porque a chave ou webhook funciona.
 8. Atualizar este checkpoint e documentação com deploy/commit/evidências finais.
 

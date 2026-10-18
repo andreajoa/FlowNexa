@@ -27,3 +27,7 @@ Após publicar e registrar o webhook, conectar `gilberto.rebuild` no FlowNexa e 
 Fontes: [conectar contas](https://docs.zernio.com/guides/connecting-accounts), [Instagram](https://docs.zernio.com/platforms/instagram), [webhooks](https://docs.zernio.com/webhooks), [eventos inbox](https://docs.zernio.com/webhooks/inbox), [resposta privada](https://docs.zernio.com/comments/send-private-reply-to-comment), [Direct](https://docs.zernio.com/messages/send-inbox-message) e [preços](https://docs.zernio.com/pricing).
 
 Verificação anterior à publicação: 163 testes Node aprovados; 14 testes específicos Zernio; navegador com 22 checks da aplicação, 3 checks de fluxos ricos e 4 checks do login Zernio, todos sem conexão social nem envio real. Sintaxe e parsing do script do navegador aprovados. O teste de navegador antigo falhou no seletor de texto alterado, foi atualizado e passou integralmente na nova execução.
+
+## Publicação real
+
+Em 2026-10-18, o deployment `dpl_Ct5KpZfp6ytNJUbNNwRypf9a1vvW` (fonte `087d5a8`, implementação `2965da9`) foi promovido para https://flownex.online. A saúde retornou HTTP 200. O webhook Production `6ad50e963b4b31b29df7bfe4` foi registrado com os três eventos e segredo já armazenado na Vercel. O teste real `POST /v1/webhooks/test` retornou HTTP 200 e `success=true`, confirmando recebimento autenticado pelo gateway e handler publicados. Esse teste não conectou nem enviou mensagem a gilberto.rebuild; login e consentimento Instagram continuam pendentes.
