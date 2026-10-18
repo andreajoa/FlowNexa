@@ -1,3 +1,15 @@
+# Objetivo concluído — 18 outubro 2026
+
+Os dois fluxos estão publicados (enabled1/version2), não recriar nem publicar duplicatas:
+Direct e7892923-edd3-4b3e-aa2e-d29e9b301c19 (29 nós), comentários d092adbb-413d-4d30-8bad-a8c13c0c2c9c (23 nós).
+Deployment dpl_ykby3Mwo4rsYEC28msSEVaBxbVVm / código adb8ed9, promovido https://flownex.online.
+169 testes completos aprovados; browser de nós/editor/preview/publicação/mobile aprovado. 3 PNGs reais verificados no deployment. Configurações salvas comparadas ao gerador antes da publicação. Scheduler: cinco ticks de minuto HTTP200.
+Nenhum envio real executado pelo agente. Entrega externa precisa de um novo Direct/comentário real de outra conta Instagram. Não chamar teste simulado de entrega real.
+Leia campaigns/gilberto-rebuild/README.md para conteúdo, links e calendário. Rotação automática ao pedir livro: agora–30/11/2026 Black Friday; 01–25/12 Natal; 26/12–07/01/2027 Ano Novo; depois evergreen. Sem desconto inventado. Posts não publicados, sem broadcast. Likes/saves/shares entre terceiros não são gatilhos suportados. Usuário foi informado.
+Monitor deve estar encerrado com marcador complete após finalizar evidências e atualização da PR15. Se houver nova tarefa, usar esse estado para continuar sem repetir o que já está publicado.
+
+--- Registro de implementação (histórico, tarefas acima já concluídas) ---
+
 # Continuação autorizada — Gilberto Instagram / campanhas
 
 Objetivo atual: publicar no workspace GILBERT.REBUILD dois fluxos em inglês, Direct/story e comentários de qualquer publicação, baseados no PDF fornecido e no site oficial. Incluir criativos clean de Black Friday, Natal e Ano Novo. O usuário esclareceu que também desejava likes, saves e shares: esses eventos de publicações não permitem iniciar DM oficial; compartilhamento recebido como mensagem pode iniciar Direct. Não inventar suporte a likes/saves nem descontos. Pergunta opcional de oferta pendente.
