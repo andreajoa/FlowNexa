@@ -41,7 +41,7 @@ const member=await env.DB.prepare("SELECT role FROM memberships WHERE workspace_
 if(!member||!["owner","admin"].includes(member.role))return J({error:"forbidden"},403);
 const state=crypto.randomUUID()+crypto.randomUUID(),stateHash=await hash(state+":"+cookieToken(request));
 await env.DB.prepare("INSERT INTO oauth_states(state_hash,user_id,workspace_id,expires_at) VALUES (?,?,?,?)").bind(stateHash,user.id,workspace,Math.floor(Date.now()/1000)+600).run();
-const p=new URLSearchParams({client_id:env.META_APP_ID,redirect_uri:redirect,response_type:"code",scope:INSTAGRAM_SCOPES.join(","),state,enable_fb_login:"0",force_authentication:"1"});
+const p=new URLSearchParams({client_id:env.META_APP_ID,redirect_uri:redirect,response_type:"code",scope:INSTAGRAM_SCOPES.join(","),state,enable_fb_login:"0",force_reauth:"true"});
 return J({authorization_url:"https://www.instagram.com/oauth/authorize?"+p.toString()});
 }
 if(url.pathname==="/api/instagram/callback"){
@@ -60,7 +60,9 @@ const exchange=await (env.META_FETCH||fetch)("https://api.instagram.com/oauth/ac
 const shortPayload=await exchange.json().catch(()=>({}));
 const short=validToken(shortPayload?.access_token)&&!shortPayload.data?shortPayload:!shortPayload?.access_token&&Array.isArray(shortPayload?.data)&&shortPayload.data.length===1?shortPayload.data[0]:null;
 if(!exchange.ok||!validToken(short?.access_token))return failed('token_exchange_failed',exchange,shortPayload);
-if(short.permissions!==undefined&&(!Array.isArray(short.permissions)||!INSTAGRAM_SCOPES.every(scope=>short.permissions.includes(scope))))return failed('instagram_permissions_missing');
+// Meta documents a comma-separated string; existing responses also use arrays.
+const permissions=Array.isArray(short.permissions)?short.permissions:typeof short.permissions==='string'?short.permissions.split(',').map(scope=>scope.trim()):null;
+if(short.permissions!==undefined&&(!permissions||permissions.some(scope=>typeof scope!=='string'||!/^\w+$/.test(scope))||!INSTAGRAM_SCOPES.every(scope=>permissions.includes(scope))))return failed('instagram_permissions_missing');
 // A short-lived token must never be persisted as a renewable long-lived credential.
 step='long_token_exchange';
 const longer=new URL("https://graph.instagram.com/access_token");

@@ -39,13 +39,25 @@ test('callback connects gilberto.rebuild through versioned profile API despite l
  assert.equal(calls.filter(c=>c.url.pathname==='/me').length,0);
 });
 test('callback accepts Instagram wrapped token response',async t=>{const{callback}=await setup(t,{wrapped:true});const response=await callback();assert.equal(response.status,302,await response.clone().text());});
+test('callback accepts the documented comma-separated granted permissions',async t=>{
+ const{env,callback}=await setup(t,{wrapped:true});const fetcher=env.META_FETCH;
+ env.META_FETCH=async(url,options)=>{const response=await fetcher(url,options);if(new URL(url).pathname!=='/oauth/access_token')return response;const payload=await response.json();payload.data[0].permissions=payload.data[0].permissions.join(',');return Response.json(payload);};
+ const response=await callback();assert.equal(response.status,302,await response.clone().text());
+});
+test('comma-separated permissions still reject absent or malformed grants',async t=>{
+ for(const permissions of ['instagram_business_basic','instagram_business_basic,,instagram_business_manage_messages,instagram_business_manage_comments',{},['instagram_business_basic',9]]){
+  const{env,callback,db}=await setup(t);const fetcher=env.META_FETCH;
+  env.META_FETCH=(url,options)=>new URL(url).pathname==='/oauth/access_token'?Promise.resolve(Response.json({access_token:'short-token',permissions})):fetcher(url,options);
+  const response=await callback();assert.equal(response.status,403);assert.equal((await response.json()).error,'instagram_permissions_missing');assert.equal((await db.prepare('SELECT count(*) n FROM instagram_accounts').first()).n,0);
+ }
+});
 test('failed long-lived exchange never saves a short-lived token as a durable connection',async t=>{
  const{db,callback,calls}=await setup(t,{exchangeFails:true});const response=await callback();
  assert.equal(response.status,502);assert.equal((await response.json()).error,'long_token_exchange_failed');assert.equal((await db.prepare('SELECT count(*) n FROM instagram_accounts').first()).n,0);assert.equal(calls.some(c=>c.url.pathname.endsWith('/subscribed_apps')),false);
 });
 
 test('authorization supports choosing another account and uses complete business permissions',async t=>{
- const{connect}=await setup(t);const auth=await connect();assert.equal(auth.origin,'https://www.instagram.com');assert.equal(auth.searchParams.get('force_authentication'),'1');assert.equal(auth.searchParams.get('enable_fb_login'),'0');assert.equal(auth.searchParams.get('redirect_uri'),origin+'/api/instagram/callback');assert.equal(auth.searchParams.get('scope'),'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments');
+ const{connect}=await setup(t);const auth=await connect();assert.equal(auth.origin,'https://www.instagram.com');assert.equal(auth.searchParams.get('force_reauth'),'true');assert.equal(auth.searchParams.get('enable_fb_login'),'0');assert.equal(auth.searchParams.get('redirect_uri'),origin+'/api/instagram/callback');assert.equal(auth.searchParams.get('scope'),'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments');
 });
 test('state is single use, session-bound, expires, and requires current administrative membership',async t=>{
  const{env,db,request,connect,callback,calls}=await setup(t);let auth=await connect();assert.equal((await callback(auth)).status,302);let count=calls.length;assert.equal((await callback(auth)).status,403);assert.equal(calls.length,count);
