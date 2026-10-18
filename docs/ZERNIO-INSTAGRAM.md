@@ -31,3 +31,5 @@ Verificação anterior à publicação: 163 testes Node aprovados; 14 testes esp
 ## Publicação real
 
 Em 2026-10-18, o deployment `dpl_Ct5KpZfp6ytNJUbNNwRypf9a1vvW` (fonte `087d5a8`, implementação `2965da9`) foi promovido para https://flownex.online. A saúde retornou HTTP 200. O webhook Production `6ad50e963b4b31b29df7bfe4` foi registrado com os três eventos e segredo já armazenado na Vercel. O teste real `POST /v1/webhooks/test` retornou HTTP 200 e `success=true`, confirmando recebimento autenticado pelo gateway e handler publicados. Esse teste não conectou nem enviou mensagem a gilberto.rebuild; login e consentimento Instagram continuam pendentes.
+
+O início real de conexão no workspace GILBERT.REBUILD também foi validado: perfil remoto criado e navegador redirecionado ao login oficial do Instagram por URL gerada pela Zernio. A etapa de senha e consentimento está pendente com o proprietário.

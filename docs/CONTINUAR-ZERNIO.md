@@ -56,3 +56,10 @@ Monitor local em `/Users/andrealmeida/.local/share/flownexa-codex-resume/watch.p
 **Ao terminar o trabalho autônomo ou depender de ação humana (login/2FA/consentimento), criar `/Users/andrealmeida/.local/share/flownexa-codex-resume/complete` para impedir retomadas desnecessárias.** Estado e logs não contêm conversas nem segredos. Para desativar completamente: `launchctl bootout gui/501/com.flownexa.codex-usage-resume`.
 
 Documentação oficial consultada: https://learn.chatgpt.com/docs/app-server e https://learn.chatgpt.com/docs/developer-commands?surface=cli . O CLI não fornece a interface de tarefas agendadas; o monitor é uma automação local específica, não uma função nativa de renovação automática.
+
+
+## Último estado da conexão real
+
+O botão real do FlowNexa foi acionado na sessão autenticada do proprietário, workspace GILBERT.REBUILD (`878a9e78-44a1-42ca-8cce-e454ce36da22`). O backend criou o perfil remoto `6ad50efa216931630f8e293b`, gerou state e URL OAuth reais e levou a aba Chrome `1773772452` (janela `1773771909`) ao login oficial em `https://www.instagram.com/accounts/login/`. Nenhuma senha foi consultada/preenchida e nenhum consentimento foi confirmado pelo agente. A conta ainda precisa da autenticação do proprietário. Se o state expirar (10 minutos desde o início), iniciar novamente pelo botão Conectar Instagram no FlowNexa. Não reutilizar URL antiga nem imprimir sua query.
+
+O usuário foi informado em comentário de que deve concluir login e autorização diretamente nessa aba. Próximo trabalho depende dessa autenticação: consultar contas Zernio, verificar callback e conta local no workspace certo, depois validar interações reais apenas no escopo autorizado. Não declarar conta conectada com base apenas na criação do perfil ou no teste de webhook.
