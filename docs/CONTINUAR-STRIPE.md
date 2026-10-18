@@ -50,3 +50,11 @@ O monitor de retomada só deve encerrar quando o objetivo estiver concluído ou 
 ## Ajuste autorizado pelo proprietário
 
 Pro USD mensal reduzido para US$9,90; anual mantido em US$129 e demais preços preservados. Removida promessa genérica de dois meses de economia: o Pro USD anual agora supera doze mensalidades. Pesquisa aprofundada dos canais autorizada, preservando o Instagram.
+
+## Validação do preço US$9,90
+
+Commit `0fab92d` enviado à PR #16. Passaram 27 testes focados de catálogo, cobrança e provisionamento, mais navegador pt-BR/en-US incluindo o novo preço mensal, anual preservado, troca manual, checkout simulado e celular. Zero cobranças reais. Nova prévia protegida READY: `https://flownexa-qtq2a0op2-flownexa3.vercel.app`, deployment `dpl_CPJ8BTpNQ9VfRLwpaQnBuQwzGFwq`. Não promovida para o domínio público. Bloqueio de verificação do titular na Stripe permanece.
+
+Verificação remota da nova prévia passou: saúde OK, catálogo contém Pro USD mensal 990 centavos e anual 12900, JavaScript válido e domínio público preservado.
+
+Pesquisa aprofundada concluída em `docs/research/MULTICHANNEL-IMPLEMENTATION-2026-10-18.md`: OAuth/escopos, endpoints, eventos, limites de conta/janelas/mídia, capacidades, migração aditiva e flags desligadas. Ordem Facebook → TikTok → YouTube. Nenhuma implementação multicanal ou conexão foi feita. Próxima mudança técnica proposta: contratos/fixtures e armazenamento separado com todos os canais novos desligados; não alterar tabelas/IDs Instagram. TikTok tem orçamento de dez respostas/48h; YouTube um canal por perfil Zernio; proibir substituição silenciosa de contas em reconexão.
