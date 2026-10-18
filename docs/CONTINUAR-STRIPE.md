@@ -38,3 +38,11 @@ Chrome Stripe: prefixo `https://dashboard.stripe.com/acct_1OOu0JG3HxcyUpFW/apike
 Facebook, TikTok e YouTube foram pesquisados, mas ainda não implementados. Facebook: Páginas/Messenger; TikTok: contas Business elegíveis e capacidades diferentes; YouTube: comentários públicos, sem DM na API usada. Não anunciá-los como canais ativos.
 
 O monitor de retomada só deve encerrar quando o objetivo estiver concluído ou o proprietário cancelar: criar `/Users/andrealmeida/.local/share/flownexa-codex-resume/complete`. Não criar enquanto a ativação Stripe estiver pendente.
+
+## Revisão salva nesta retomada
+
+- Implementação commitada em `b1096d6`, enviada para `origin/feat/stripe-localized-subscriptions`.
+- PR de rascunho #16: https://github.com/andreajoa/FlowNexa/pull/16, com base na branch da PR #15 para separar o trabalho de cobrança.
+- Release preparado sem promover o domínio público: `dpl_98WdFujgowmaL62TaStRaEX2cMRp`, https://flownexa-1jje9c8j9-flownexa3.vercel.app. Build READY. Usa as variáveis atuais, sem pagamentos reais configurados. A prévia exige autenticação Vercel.
+- Não há `/tmp/flownexa-stripe-provision-progress.json`: o provisionamento real ainda não foi executado. Aguardar a verificação do titular, conforme instrução expressa do proprietário.
+- Verificação remota do release passou: `/api/health` OK, preços localizados presentes, JavaScript da landing e do aplicativo válido, capacidades dos fluxos presentes. `https://flownex.online` continua servindo a versão anterior; o domínio público não foi promovido. Zero cobranças reais.
