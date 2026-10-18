@@ -63,3 +63,19 @@ Documentação oficial consultada: https://learn.chatgpt.com/docs/app-server e h
 O botão real do FlowNexa foi acionado na sessão autenticada do proprietário, workspace GILBERT.REBUILD (`878a9e78-44a1-42ca-8cce-e454ce36da22`). O backend criou o perfil remoto `6ad50efa216931630f8e293b`, gerou state e URL OAuth reais e levou a aba Chrome `1773772452` (janela `1773771909`) ao login oficial em `https://www.instagram.com/accounts/login/`. Nenhuma senha foi consultada/preenchida e nenhum consentimento foi confirmado pelo agente. A conta ainda precisa da autenticação do proprietário. Se o state expirar (10 minutos desde o início), iniciar novamente pelo botão Conectar Instagram no FlowNexa. Não reutilizar URL antiga nem imprimir sua query.
 
 O usuário foi informado em comentário de que deve concluir login e autorização diretamente nessa aba. Próximo trabalho depende dessa autenticação: consultar contas Zernio, verificar callback e conta local no workspace certo, depois validar interações reais apenas no escopo autorizado. Não declarar conta conectada com base apenas na criação do perfil ou no teste de webhook.
+
+
+## Conexão concluída — 2026-10-18
+
+O proprietário confirmou a aba de gilberto.rebuild aberta e autenticada. Uma nova autorização foi iniciada pelo FlowNexa no mesmo workspace. Para aproveitar essa sessão já confirmada, a URL OAuth desta tentativa foi aberta com o parâmetro documentado `force_reauth=false`; state, client_id, redirect_uri e scopes gerados pela Zernio foram preservados. A configuração normal do botão continua exigindo nova autenticação para seleção segura de outras contas.
+
+A tela de consentimento identificou explicitamente gilberto.rebuild e o aplicativo Social Media Connector, com perfil, comentários e mensagens. A autorização solicitada foi concluída. O callback voltou a `/app`, mostrou sucesso e gravou a conta no workspace GILBERT.REBUILD.
+
+Provas reais de leitura:
+- API Zernio: conta `6ad5111d645e2f0af3da8ed2`, username gilberto.rebuild, isActive=true, needsReconnection=false; as três permissões solicitadas concedidas.
+- Health Zernio: token válido, renovação não necessária, expiração 2026-12-17. O status geral "error" refere-se a publicação de posts e analytics não autorizados por esta integração; comentários e mensagens estão concedidos. Não ampliar escopos só para tornar esse health genérico verde.
+- GET autenticado `/api/accounts?workspace=...`: HTTP 200, conta local com status connected.
+- GET autenticado `/api/accounts/<id>/media`: HTTP 200, 25 publicações retornadas pelo novo transporte.
+- Zero mensagens, comentários ou automações reais disparados pelo agente. O workspace não tem fluxos salvos. Testes de entrega real ainda não foram executados e precisam de escopo explícito antes de enviar mensagens a terceiros.
+
+A conexão solicitada foi concluída. O monitor de retomada desta tarefa recebe o marcador `complete` para não enfileirar trabalho desnecessário. Não repetir OAuth, desconectar a conta ou reativar presets para "validar" novamente. Se houver novo pedido de automação ou teste real, partir deste estado.

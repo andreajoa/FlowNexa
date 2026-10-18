@@ -33,3 +33,10 @@ Verificação anterior à publicação: 163 testes Node aprovados; 14 testes esp
 Em 2026-10-18, o deployment `dpl_Ct5KpZfp6ytNJUbNNwRypf9a1vvW` (fonte `087d5a8`, implementação `2965da9`) foi promovido para https://flownex.online. A saúde retornou HTTP 200. O webhook Production `6ad50e963b4b31b29df7bfe4` foi registrado com os três eventos e segredo já armazenado na Vercel. O teste real `POST /v1/webhooks/test` retornou HTTP 200 e `success=true`, confirmando recebimento autenticado pelo gateway e handler publicados. Esse teste não conectou nem enviou mensagem a gilberto.rebuild; login e consentimento Instagram continuam pendentes.
 
 O início real de conexão no workspace GILBERT.REBUILD também foi validado: perfil remoto criado e navegador redirecionado ao login oficial do Instagram por URL gerada pela Zernio. A etapa de senha e consentimento está pendente com o proprietário.
+
+
+## Conexão real confirmada
+
+Em 2026-10-18, gilberto.rebuild concluiu o OAuth pela Zernio e foi persistida como conectada no workspace GILBERT.REBUILD. A API real confirmou conta ativa e as permissões instagram_business_basic, instagram_business_manage_comments e instagram_business_manage_messages. O token do provedor é válido até 2026-12-17. A API autenticada do FlowNexa retornou status connected e a leitura de publicações retornou HTTP 200 com 25 itens. A primeira tentativa registrada nesta documentação estava pendente de login; esta seção registra a conclusão posterior.
+
+O health genérico da Zernio acusa ausência de content_publish e manage_insights, pois avalia publicação de posts e analytics; esses recursos não foram solicitados pelo FlowNexa. O token está válido e os escopos de comentários/mensagens estão concedidos. Nenhum envio real foi realizado e não há fluxo ativo neste workspace. A conexão e a leitura estão comprovadas; a entrega de automações continua sem validação real.
