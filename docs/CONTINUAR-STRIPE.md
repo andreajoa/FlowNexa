@@ -6,7 +6,7 @@ Atualizado em 18/10/2026. Branch `feat/stripe-localized-subscriptions`, baseada 
 
 - Atenza investigado sem alterar código, produtos, assinaturas ou portal. Não abrir/copiar seus arquivos `.env`.
 - Pesquisa oficial registrada em `docs/research/PRICING-AND-CHANNELS-2026-10-18.md`.
-- Catálogo com oito preços: Pro R$59,90/mês ou R$599/ano; US$12,90/mês ou US$129/ano. Equipes R$119,90/mês ou R$1.199/ano; US$24,90/mês ou US$249/ano.
+- Catálogo com oito preços: Pro R$59,90/mês ou R$599/ano; US$9,90/mês ou US$129/ano. Equipes R$119,90/mês ou R$1.199/ano; US$24,90/mês ou US$249/ano.
 - Português seleciona BRL; inglês e demais idiomas selecionam USD. Troca manual persistida. Anual cobrado integralmente, com equivalente mensal informativo.
 - Checkout embutido, validação de valor/moeda/recorrência no servidor, troca segura de checkout não pago, idioma e configuração exclusiva do portal.
 - Limites Pro: uma conta e 10.000 envios/mês calendário UTC; Equipes: duas contas e 20.000. Sem cobrança automática de excedentes.
@@ -46,3 +46,7 @@ O monitor de retomada só deve encerrar quando o objetivo estiver concluído ou 
 - Release preparado sem promover o domínio público: `dpl_98WdFujgowmaL62TaStRaEX2cMRp`, https://flownexa-1jje9c8j9-flownexa3.vercel.app. Build READY. Usa as variáveis atuais, sem pagamentos reais configurados. A prévia exige autenticação Vercel.
 - Não há `/tmp/flownexa-stripe-provision-progress.json`: o provisionamento real ainda não foi executado. Aguardar a verificação do titular, conforme instrução expressa do proprietário.
 - Verificação remota do release passou: `/api/health` OK, preços localizados presentes, JavaScript da landing e do aplicativo válido, capacidades dos fluxos presentes. `https://flownex.online` continua servindo a versão anterior; o domínio público não foi promovido. Zero cobranças reais.
+
+## Ajuste autorizado pelo proprietário
+
+Pro USD mensal reduzido para US$9,90; anual mantido em US$129 e demais preços preservados. Removida promessa genérica de dois meses de economia: o Pro USD anual agora supera doze mensalidades. Pesquisa aprofundada dos canais autorizada, preservando o Instagram.

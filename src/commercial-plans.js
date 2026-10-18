@@ -1,6 +1,6 @@
 // Approved application catalog: amounts are minor units, annual plans renew once a year.
 export const PLAN_TIERS=[
- {id:'pro',name:'FlowNexa Pro',accounts:1,messages:10000,amounts:{brl:{month:5990,year:59900},usd:{month:1290,year:12900}}},
+ {id:'pro',name:'FlowNexa Pro',accounts:1,messages:10000,amounts:{brl:{month:5990,year:59900},usd:{month:990,year:12900}}},
  {id:'teams',name:'FlowNexa Equipes',name_en:'FlowNexa Teams',accounts:2,messages:20000,amounts:{brl:{month:11990,year:119900},usd:{month:2490,year:24900}}}
 ];
 export function commercialPlans(){return PLAN_TIERS.flatMap(tier=>['brl','usd'].flatMap(currency=>['month','year'].map(interval=>({id:`${tier.id}_${currency}_${interval}`,tier:tier.id,name:currency==='usd'?(tier.name_en||tier.name):tier.name,unit_amount:tier.amounts[currency][interval],currency,interval,interval_count:1,accounts:tier.accounts,messages:tier.messages}))));}
@@ -17,7 +17,7 @@ function pricingBoot(plans,browserBillingPreference,planDisplay){
  try{const saved=localStorage.getItem('flownexa_billing_currency');if(['brl','usd'].includes(saved))currency=saved;}catch{}
  moneySelect.value=currency;const english=pref.locale==='en';
  const text=(selector,value)=>{const el=section.querySelector(selector);if(el)el.textContent=value;};
- if(english){text('#plans-title','Simple prices. Your next chapter.');text('.plans-sub','Monthly or yearly subscriptions, with two months saved on the yearly plan.');text('.plans-rating','Instagram automations, visual conversation flows and campaign scheduling.');for(const b of section.querySelectorAll('[data-billing]'))b.textContent=b.dataset.billing==='yearly'?'Yearly · save 2 months':'Monthly';}
+ if(english){text('#plans-title','Simple prices. Your next chapter.');text('.plans-sub','Choose a monthly or yearly subscription. Compare the total before subscribing.');text('.plans-rating','Instagram automations, visual conversation flows and campaign scheduling.');for(const b of section.querySelectorAll('[data-billing]'))b.textContent=b.dataset.billing==='yearly'?'Yearly':'Monthly';}
  function render(){
   for(const card of section.querySelectorAll('[data-plan-tier]')){const p=plans.find(p=>p.tier===card.dataset.planTier&&p.currency===currency&&p.interval===interval);if(!p)continue;const display=planDisplay(p,pref.locale);card.querySelector('.plan-name').textContent=p.name;card.querySelector('.plan-price').textContent=display.price+(interval==='year'?(english?'/year':'/ano'):(english?'/month':'/mês'));
    card.querySelector('.plan-description').textContent=interval==='year'?(english?'Charged once per year. '+display.monthly_equivalent+'/month equivalent.':'Cobrado uma vez por ano. Equivalente a '+display.monthly_equivalent+'/mês.'):(english?'Renews monthly. Manage or cancel your subscription in the billing portal.':'Renova mensalmente. Gerencie ou cancele a assinatura no portal de cobrança.');

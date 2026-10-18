@@ -18,10 +18,10 @@ O Pro do FlowNexa fica abaixo dessas referências pagas, inclusive quando compar
 
 | Plano por espaço de trabalho | Contas Instagram | Envios por mês calendário | BRL mensal / anual | USD mensal / anual |
 |---|---:|---:|---|---|
-| Pro |1|10.000|R$59,90 / R$599|US$12,90 / US$129|
+| Pro |1|10.000|R$59,90 / R$599|US$9,90 / US$129|
 | Equipes / Teams |2|20.000|R$119,90 / R$1.199|US$24,90 / US$249|
 
-O anual custa dez mensalidades, é pago integralmente e renova anualmente. O equivalente mensal é apenas informativo. São preços locais fixos, não conversão cambial ao vivo. Português seleciona BRL e outros idiomas, incluindo inglês, selecionam USD; a escolha manual fica salva no navegador. O servidor decide o Price real e valida valor, moeda e recorrência contra o catálogo. Não há cobrança de excedentes automática: o limite interrompe novos envios. Cada chamada de envio reservada conta, inclusive resultado incerto; rejeições não contam. A franquia é mensal em UTC mesmo na assinatura anual.
+O anual é pago integralmente e renova anualmente. Por solicitação do proprietário, o Pro USD mensal passou para US$9,90 e o anual foi mantido em US$129: nesse caso o anual custa mais que doze mensalidades (US$118,80) e não deve ser anunciado como desconto. Os demais anuais custam dez mensalidades. O equivalente mensal é apenas informativo. São preços locais fixos, não conversão cambial ao vivo. Português seleciona BRL e outros idiomas, incluindo inglês, selecionam USD; a escolha manual fica salva no navegador. O servidor decide o Price real e valida valor, moeda e recorrência contra o catálogo. Não há cobrança de excedentes automática: o limite interrompe novos envios. Cada chamada de envio reservada conta, inclusive resultado incerto; rejeições não contam. A franquia é mensal em UTC mesmo na assinatura anual.
 
 ## Custos e limites da comparação
 
