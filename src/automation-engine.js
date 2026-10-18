@@ -78,7 +78,7 @@ async function processEvent(env,row,deadline){
    if(error.deferred){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='processing_deferred' WHERE id=?").bind(job.id).run();throw error;}
    if(error.retryable&&row.attempts<6){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='meta_rate_limited' WHERE id=?").bind(job.id).run();throw error;}
    const uncertain=error.message==='delivery_unknown';
-   const allowed=['delivery_unknown','messaging_disabled','account_reconnect_required','private_reply_window_expired','message_window_expired','event_time_invalid','invalid_comment','invalid_recipient','unsupported_action','meta_request_rejected','meta_invalid_response'];
+   const allowed=['billing_message_limit','delivery_unknown','messaging_disabled','account_reconnect_required','private_reply_window_expired','message_window_expired','event_time_invalid','invalid_comment','invalid_recipient','unsupported_action','meta_request_rejected','meta_invalid_response'];
    await env.DB.prepare('UPDATE automation_jobs SET status=?,error=?,completed_at=? WHERE id=?').bind(uncertain?'unknown':'failed',allowed.includes(error.message)?error.message:'processing_failed',Date.now(),job.id).run();
    if(error.message==='account_reconnect_required')await env.DB.prepare("UPDATE instagram_accounts SET status='reconnect_required' WHERE id=?").bind(account.id).run();
    if(uncertain)unknown=true;else failed=true;break;

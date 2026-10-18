@@ -1,3 +1,4 @@
+import {withBillingAccountCapacity,billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,cookieToken} from './identity.js';
 const json=(o,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const enc=new TextEncoder();
@@ -39,6 +40,7 @@ if(url.pathname==="/api/instagram/connect"){
 const workspace=url.searchParams.get("workspace");
 const member=await env.DB.prepare("SELECT role FROM memberships WHERE workspace_id=? AND user_id=?").bind(workspace,user.id).first();
 if(!member||!["owner","admin"].includes(member.role))return J({error:"forbidden"},403);
+if(!await billingAccess(env,workspace))return J({error:'billing_subscription_required'},402);
 const state=crypto.randomUUID()+crypto.randomUUID(),stateHash=await hash(state+":"+cookieToken(request));
 await env.DB.prepare("INSERT INTO oauth_states(state_hash,user_id,workspace_id,expires_at) VALUES (?,?,?,?)").bind(stateHash,user.id,workspace,Math.floor(Date.now()/1000)+600).run();
 const p=new URLSearchParams({client_id:env.META_APP_ID,redirect_uri:redirect,response_type:"code",scope:INSTAGRAM_SCOPES.join(","),state,enable_fb_login:"0",force_reauth:"true"});
@@ -81,7 +83,7 @@ const profile=(await response.json().catch(()=>null))||{};
 if(!response.ok||typeof profile.username!=="string"||!profile.username||!/^\d{1,50}$/.test(String(profile.user_id||"")))return failed('instagram_profile_failed',response,profile);
 const id=crypto.randomUUID();const encrypted=await encryptToken(activeToken,env.TOKEN_ENCRYPTION_KEY);
 const igId=String(profile.user_id);
-const existing=await env.DB.prepare("SELECT workspace_id FROM instagram_accounts WHERE ig_user_id=?").bind(igId).first();
+const existing=await env.DB.prepare("SELECT id,workspace_id FROM instagram_accounts WHERE ig_user_id=?").bind(igId).first();
 if(existing&&existing.workspace_id!==stateRow.workspace_id)return J({error:"instagram_account_already_connected_to_other_workspace"},409);
 const expire=Math.floor(Date.now()/1000)+lifetime;
 step='subscription';
@@ -92,7 +94,7 @@ const subscribed=await (env.META_FETCH||fetch)(subscriptionUrl,{method:'POST',he
 const subscriptionResult=await subscribed.json().catch(()=>({}));if(!subscriptionConfirmed(subscribed,subscriptionResult))return failed('instagram_subscription_failed',subscribed,subscriptionResult);
 if(!await requireMembership(env.DB,user.id,stateRow.workspace_id,["owner","admin"]))return J({error:"forbidden"},403);
 step='persistence';
-const saved=await env.DB.prepare("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,encrypted_token,token_expires_at,status) VALUES (?,?,?,?,?,?,'connected') ON CONFLICT(ig_user_id) DO UPDATE SET username=excluded.username,encrypted_token=excluded.encrypted_token,token_expires_at=excluded.token_expires_at,status='connected' WHERE instagram_accounts.workspace_id=excluded.workspace_id").bind(id,stateRow.workspace_id,profile.username,igId,encrypted,expire).run();
+const saved=await withBillingAccountCapacity(env,stateRow.workspace_id,existing?.id,()=>env.DB.prepare("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,encrypted_token,token_expires_at,status) VALUES (?,?,?,?,?,?,'connected') ON CONFLICT(ig_user_id) DO UPDATE SET username=excluded.username,encrypted_token=excluded.encrypted_token,token_expires_at=excluded.token_expires_at,status='connected' WHERE instagram_accounts.workspace_id=excluded.workspace_id").bind(id,stateRow.workspace_id,profile.username,igId,encrypted,expire).run());
 if(!saved.meta.changes)return J({error:"instagram_account_already_connected_to_other_workspace"},409);
 return new Response(null,{status:302,headers:{"location":new URL("/app?connected=1",url.origin).toString(),"cache-control":"no-store"}});
 }catch{return failed('instagram_connection_failed');}

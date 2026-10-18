@@ -1,3 +1,4 @@
+import {assertMessageCapacity} from './billing.js';
 import {isZernioAccount,accountUsable,zernioSend} from './zernio-client.js';
 import {validOutboundAction} from './conversation-graph.js';
 import {decryptToken} from './instagram-oauth.js';
@@ -20,6 +21,7 @@ export async function sendAction(env,account,event,action){
  if(!messagingReady(env,account))throw Error('messaging_disabled');
  if(!validOutboundAction(action))throw Error('unsupported_action');
  if(!accountUsable(account))throw Error('account_reconnect_required');
+ await assertMessageCapacity(env,account.workspace_id);
  if(isZernioAccount(account))return zernioSend(env,account,event,action);
  const age=Date.now()-event.at;if(age< -300000)throw Error('event_time_invalid');
  if(action.type==='private_reply'){
