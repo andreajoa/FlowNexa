@@ -9,7 +9,7 @@ Conectar Instagram de clientes ao FlowNexa, começando por gilberto.rebuild. Pro
 ## Repositório e produção
 
 - Worktree de trabalho: `/Users/andrealmeida/flownexa-instagram-audit`, branch `fix/instagram-profile-connection`.
-- PR existente https://github.com/andreajoa/FlowNexa/pull/15 . Último commit anterior à integração: `79b1f23`.
+- PR existente https://github.com/andreajoa/FlowNexa/pull/15 . Integração commitada e enviada em `2965da9` (commit anterior: `79b1f23`).
 - Produção ainda no código `91267b3`, domínio `https://flownex.online`. **Zernio ainda não publicada no momento deste registro.**
 - Projeto Vercel `flownexa3/flownexa`, project `prj_DWVerljQapY4ZRnHI93CRAhI4kTS`, team `team_RpoiNmmSvkiuCGlBgP8WyAdI`. Link `.vercel/project.json` já copiado, ignorado no git.
 - ZERNIO_API_KEY e ZERNIO_WEBHOOK_SECRET guardados como segredos Production na Vercel; INSTAGRAM_CONNECTION_PROVIDER=zernio guardado como Config Production. Não imprimir, exportar ou recriar esses valores. Um segredo já foi gerado; NÃO gerar outro sem alinhar o webhook remoto.
@@ -17,7 +17,7 @@ Conectar Instagram de clientes ao FlowNexa, começando por gilberto.rebuild. Pro
 
 ## Alterações locais ainda em andamento
 
-Novos src/zernio-client.js, src/zernio-connection.js, src/zernio-webhook.js, tests/zernio.test.js e docs/ZERNIO-INSTAGRAM.md. Alterados roteamento, gateway de assinatura, transportes, publicação de fluxos, readiness, mídia/desconexão, fila, UI e documentação. Não perder arquivos não rastreados.
+Arquivos já commitados: src/zernio-client.js, src/zernio-connection.js, src/zernio-webhook.js, tests/zernio.test.js e docs/ZERNIO-INSTAGRAM.md. Alterados roteamento, gateway de assinatura, transportes, publicação de fluxos, readiness, mídia/desconexão, fila, UI e documentação. Não perder arquivos não rastreados.
 
 Provider separado por identificador interno `zernio:<remoteId>`, sem fingir token/expiração Meta. Três tabelas aditivas bootstrapadas no primeiro connect autorizado. Perfil por workspace e callback com state/sessão/RBAC/consumo único e verificação remota. Webhooks HMAC brutos, ignora amostras/echo/replies/standby, queue durável existente. Escritas incertas nunca são reenviadas automaticamente. Contas Meta existentes continuam no transporte original.
 
@@ -49,6 +49,10 @@ Scripts auxiliares sem segredos em /tmp: flownexa-configure-zernio.mjs (já exec
 
 O Chrome tem aba FlowNexa e Meta autenticadas. Sessões clonadas/agent-browser não estão logadas. Não imprimir cookies nem URLs OAuth completas.
 
-## Pedido de retomada automática
+## Retomada automática configurada
 
-Usuário quer continuação automática quando limite renovar, sem outra mensagem. É preciso distinguir preservar este checkpoint de programar um executor real. Não afirmar agendamento/reativação automática sem recurso confirmado e configuração efetiva. Não usar loops que tentem contornar limites. Não armazenar credenciais em automações.
+Monitor local em `/Users/andrealmeida/.local/share/flownexa-codex-resume/watch.py`, LaunchAgent `com.flownexa.codex-usage-resume`, intervalo 180 segundos. A primeira execução efetiva retornou `waiting_for_usage_stop`, sem mensagens enfileiradas. Cinco testes de decisão passaram. Usa `codex app-server` para ler o erro da última execução e o limite oficial; só tenta `codex queue` nesta conversa após erro usageLimitExceeded/rateLimitExceeded e prazo de reset vencido. Não compra créditos, troca conta/modelo nem tenta contornar limites. Máximo cinco retomadas em sete dias e reserva antes de enfileirar para evitar duplicação. Requer Mac ligado e sessão do usuário disponível. O acionamento real de uma retomada ainda não foi observado.
+
+**Ao terminar o trabalho autônomo ou depender de ação humana (login/2FA/consentimento), criar `/Users/andrealmeida/.local/share/flownexa-codex-resume/complete` para impedir retomadas desnecessárias.** Estado e logs não contêm conversas nem segredos. Para desativar completamente: `launchctl bootout gui/501/com.flownexa.codex-usage-resume`.
+
+Documentação oficial consultada: https://learn.chatgpt.com/docs/app-server e https://learn.chatgpt.com/docs/developer-commands?surface=cli . O CLI não fornece a interface de tarefas agendadas; o monitor é uma automação local específica, não uma função nativa de renovação automática.
