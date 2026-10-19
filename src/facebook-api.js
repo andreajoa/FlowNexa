@@ -1,3 +1,4 @@
+import {validateFacebookGraph} from './facebook-graph.js';
 import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds,sameOrigin,payload} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
@@ -6,14 +7,19 @@ const oid=id=>typeof id==='string'&&/^[a-f0-9]{24}$/i.test(id);
 const pageNativeId=id=>typeof id==='string'?id.match(/^(?:\d{1,100}:page:)?(\d{1,100})$/)?.[1]||null:null;
 const profileId=p=>typeof p==='string'?p:p?._id;
 const safeAccount=a=>({id:a.id,name:a.name,native_id:a.native_id,status:a.status});
-const safeFlow=f=>({...f,keywords:JSON.parse(f.keywords)});
+const safeFlow=f=>{const graph=f.graph?JSON.parse(f.graph):null;return{...f,keywords:JSON.parse(f.keywords),graph,node_count:graph?.nodes?.length||0};};
 const fail=(message,status=400)=>Object.assign(Error(message),{status});
 export function facebookFlowInput(body){
- const {name,trigger_type,response_kind,response_text,keywords=[]}=body;
+ const {name,trigger_type,response_kind,keywords=[]}=body;let {response_text}=body,graph=null;
+ if(response_kind==='graph'){
+  graph=typeof body.graph==='string'?(()=>{try{return JSON.parse(body.graph);}catch{return null;}})():body.graph;
+  const checked=validateFacebookGraph(graph);if(!checked.ok)throw fail(checked.error==='facebook_graph_delay_unsupported'?checked.error:'facebook_invalid_graph');
+  response_text='Conversa com nós';
+ }
  if(typeof name!=='string'||!name.trim()||name.length>100||!['dm_any','dm_keyword','comment_any','comment_keyword'].includes(trigger_type)||typeof response_text!=='string'||!response_text.trim()||response_text.length>2000)throw fail('facebook_invalid_flow');
- if(trigger_type.startsWith('dm_')?response_kind!=='message':!['public_reply','private_reply'].includes(response_kind))throw fail('facebook_unsupported_action');
+ if(response_kind!=='graph'&&(trigger_type.startsWith('dm_')?response_kind!=='message':!['public_reply','private_reply'].includes(response_kind)))throw fail('facebook_unsupported_action');
  if(!Array.isArray(keywords)||keywords.length>10||keywords.some(k=>typeof k!=='string'||!k.trim()||k.length>40)||trigger_type.endsWith('_keyword')&&!keywords.length)throw fail('facebook_invalid_keywords');
- return{name:name.trim(),trigger_type,response_kind,response_text:response_text.trim(),keywords:trigger_type.endsWith('_keyword')?keywords.map(k=>k.trim()):[]};
+ return{name:name.trim(),trigger_type,response_kind,response_text:response_text.trim(),keywords:trigger_type.endsWith('_keyword')?keywords.map(k=>k.trim()):[],graph:graph?JSON.stringify(graph):null};
 }
 async function findOrCreateProfile(env,workspace,origin){
  let row=await env.DB.prepare('SELECT profile_id FROM facebook_profiles WHERE workspace_id=?').bind(workspace).first();if(row)return row.profile_id;
@@ -105,6 +111,18 @@ export async function facebookApi(request,env){
     env.DB.prepare("UPDATE facebook_jobs SET status='cancelled',error='account_disconnected' WHERE account_id=? AND status IN ('pending','retry')").bind(account.id)
    ]);return J({disconnected:true,remote_revoked:false});
   }
+  // Reuses a conversation built in the Instagram node editor of the same workspace as a Facebook draft.
+  if(path==='/api/facebook/flows/import'&&request.method==='POST'){
+   if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
+   const source=await env.DB.prepare('SELECT name,configuration FROM flows WHERE id=? AND workspace_id=?').bind(body.instagram_flow_id,workspace).first();if(!source)throw fail('facebook_source_not_found',404);
+   let graph=null;try{graph=JSON.parse(source.configuration)?.graph;}catch{}if(!graph)throw fail('facebook_source_without_graph',409);
+   const account=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE id=? AND workspace_id=?').bind(body.account_id,workspace).first();if(!account||account.status!=='connected')throw fail('facebook_page_not_connected',409);
+   const fields=facebookFlowInput({name:(typeof body.name==='string'&&body.name.trim()?body.name:source.name+' · Facebook').slice(0,100),trigger_type:body.trigger_type||'dm_any',keywords:body.keywords||[],response_kind:'graph',graph});
+   const count=await env.DB.prepare('SELECT count(*) n FROM facebook_flows WHERE workspace_id=?').bind(workspace).first();if(count.n>=30)throw fail('facebook_flow_limit',409);
+   const id=crypto.randomUUID();
+   await env.DB.prepare('INSERT INTO facebook_flows(id,workspace_id,account_id,name,trigger_type,keywords,response_kind,response_text,graph,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(id,workspace,account.id,fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,fields.graph,nowSeconds(),nowSeconds()).run();
+   return J({flow:safeFlow(await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=?').bind(id).first())});
+  }
   const match=path.match(/^\/api\/facebook\/flows\/([^/]+)(?:\/(publish|pause))?$/);
   if(request.method==='POST'&&(path==='/api/facebook/flows'||match)){
    if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
@@ -115,12 +133,12 @@ export async function facebookApi(request,env){
    if(flow&&(!Number.isSafeInteger(body.version)||body.version!==flow.version))throw fail('facebook_flow_changed',409);
    if(operation==='publish'){
     if(!facebookSendsEnabled(env,workspace))throw fail('facebook_sends_disabled',409);
-    facebookFlowInput({...flow,keywords:JSON.parse(flow.keywords)});
+    facebookFlowInput({...flow,keywords:JSON.parse(flow.keywords),graph:flow.graph});
     const updated=await env.DB.prepare('UPDATE facebook_flows SET enabled=1,version=version+1,published_at=?,updated_at=? WHERE id=? AND version=?').bind(Date.now(),nowSeconds(),flow.id,flow.version).run();if(!updated.meta.changes)throw fail('facebook_flow_changed',409);
    }else{
     const fields=facebookFlowInput(body),id=flow?.id||crypto.randomUUID();
-    if(flow){if(body.account_id!==flow.account_id)throw fail('facebook_page_identity_changed',409);const result=await env.DB.prepare('UPDATE facebook_flows SET name=?,trigger_type=?,keywords=?,response_kind=?,response_text=?,enabled=0,version=version+1,updated_at=? WHERE id=? AND version=?').bind(fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,nowSeconds(),id,flow.version).run();if(!result.meta.changes)throw fail('facebook_flow_changed',409);}
-    else{const count=await env.DB.prepare('SELECT count(*) n FROM facebook_flows WHERE workspace_id=?').bind(workspace).first();if(count.n>=30)throw fail('facebook_flow_limit',409);await env.DB.prepare('INSERT INTO facebook_flows(id,workspace_id,account_id,name,trigger_type,keywords,response_kind,response_text,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id,workspace,accountId,fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,nowSeconds(),nowSeconds()).run();}
+    if(flow){if(body.account_id!==flow.account_id)throw fail('facebook_page_identity_changed',409);const result=await env.DB.prepare('UPDATE facebook_flows SET name=?,trigger_type=?,keywords=?,response_kind=?,response_text=?,graph=?,enabled=0,version=version+1,updated_at=? WHERE id=? AND version=?').bind(fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,fields.graph,nowSeconds(),id,flow.version).run();if(!result.meta.changes)throw fail('facebook_flow_changed',409);}
+    else{const count=await env.DB.prepare('SELECT count(*) n FROM facebook_flows WHERE workspace_id=?').bind(workspace).first();if(count.n>=30)throw fail('facebook_flow_limit',409);await env.DB.prepare('INSERT INTO facebook_flows(id,workspace_id,account_id,name,trigger_type,keywords,response_kind,response_text,graph,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(id,workspace,accountId,fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,fields.graph,nowSeconds(),nowSeconds()).run();}
     flow={id};
    }
    return J({flow:safeFlow(await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=?').bind(flow.id).first())});

@@ -8,7 +8,8 @@ export function normalizeFacebook(body,account){
   const attachment=Array.isArray(m.attachments)&&m.attachments.some(a=>a&&typeof a.type==='string');
   if(typeof m.text!=='string'&&!attachment||typeof m.text==='string'&&m.text.length>8000)return null;
   const at=Date.parse(m.sentAt);if(!Number.isFinite(at)||at<=0||at>Date.now()+300000)return null;
-  return{key:'message:'+m.platformMessageId,kind:'dm',sender_id:m.sender.id,conversation_id:conversation,text:m.text||'',at};
+  const metadata=m.metadata||body.metadata||{},payload=metadata.postback?.payload??metadata.quick_reply?.payload??metadata.quickReply?.payload??metadata.postbackPayload??metadata.quickReplyPayload;
+  return{key:'message:'+m.platformMessageId,kind:'dm',sender_id:m.sender.id,conversation_id:conversation,text:m.text||'',...(opaque(payload)?{payload}:{}),at};
  }
  if(body.event==='comment.received'){
   const c=body.comment;if(!c||c.platform!=='facebook'||c.isReply!==false||c.parentCommentId||c.isLive===true||c.author?.isOwnAccount===true||c.author?.id===account.native_id||!opaque(c.id)||!opaque(c.platformPostId)||!opaque(c.author?.id)||typeof c.text!=='string'||c.text.length>8000)return null;

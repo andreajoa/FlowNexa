@@ -16,10 +16,16 @@ export const FACEBOOK_SCHEMA=[
  "CREATE UNIQUE INDEX IF NOT EXISTS idx_facebook_one_page_workspace ON facebook_accounts(workspace_id)",
  "CREATE TABLE IF NOT EXISTS facebook_threads(account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,conversation_hash TEXT NOT NULL,standby INTEGER NOT NULL DEFAULT 0,last_control_at INTEGER NOT NULL,PRIMARY KEY(account_id,conversation_hash))"
 ];
+// Conversation graphs: a flow may carry a node graph, and a contact waiting on a reply keeps
+// one session per Page. Additive, so pilots created before graphs keep working unchanged.
+export const FACEBOOK_GRAPH_SCHEMA=[
+ "ALTER TABLE facebook_flows ADD COLUMN graph TEXT",
+ "CREATE TABLE IF NOT EXISTS facebook_sessions(account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,recipient_hash TEXT NOT NULL,flow_id TEXT NOT NULL REFERENCES facebook_flows(id) ON DELETE CASCADE,flow_version INTEGER NOT NULL,node_id TEXT NOT NULL,expires_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(account_id,recipient_hash))"
+];
 export function facebookEnabled(env,workspace){return env.FACEBOOK_CHANNEL_ENABLED==='true'&&typeof workspace==='string'&&(env.FACEBOOK_PILOT_WORKSPACES||'').split(',').map(s=>s.trim()).filter(Boolean).includes(workspace);}
 export function facebookSendsEnabled(env,workspace){return facebookEnabled(env,workspace)&&env.FACEBOOK_SENDS_ENABLED==='true';}
 export function facebookMonthlyLimit(env){const n=Number(env.FACEBOOK_MONTHLY_MESSAGE_LIMIT||1000);return Number.isSafeInteger(n)&&n>0&&n<=10000?n:1000;}
 const ready=new WeakSet();
-export async function ensureFacebookSchema(env){if(!env.DB)throw Error('database_unavailable');if(ready.has(env.DB))return;try{await env.DB.prepare('SELECT 1 FROM facebook_effects LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_threads LIMIT 1').first();}catch{for(const sql of FACEBOOK_SCHEMA)await env.DB.prepare(sql).run();}ready.add(env.DB);}
+export async function ensureFacebookSchema(env){if(!env.DB)throw Error('database_unavailable');if(ready.has(env.DB))return;try{await env.DB.prepare('SELECT 1 FROM facebook_effects LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_threads LIMIT 1').first();}catch{for(const sql of FACEBOOK_SCHEMA)await env.DB.prepare(sql).run();}try{await env.DB.prepare('SELECT graph FROM facebook_flows LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_sessions LIMIT 1').first();}catch{for(const sql of FACEBOOK_GRAPH_SCHEMA){try{await env.DB.prepare(sql).run();}catch(e){if(!/duplicate column/i.test(String(e?.message)))throw e;}}}ready.add(env.DB);}
 
 export async function facebookAccess(env,workspace){return facebookEnabled(env,workspace)&&await billingAccess(env,workspace);}

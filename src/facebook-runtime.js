@@ -3,13 +3,15 @@ import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
 import {normalizeFacebook} from './facebook-webhook.js';
+import {walkFacebookGraph,commentOpening,facebookActionBody,validateFacebookGraph} from './facebook-graph.js';
 const rows=async statement=>(await statement.all()).results||[];
 const changes=result=>Number(result?.meta?.changes||0);
 const clean=text=>String(text).normalize('NFKC').trim().toLowerCase();
 const windowError=event=>Date.now()-event.at>(event.kind==='dm'?86400000:7*86400000)?'message_window_expired':null;
 function matches(flow,event){
  if(!['dm_any','dm_keyword','comment_any','comment_keyword'].includes(flow.trigger_type)||!flow.trigger_type.startsWith(event.kind==='dm'?'dm_':'comment_'))return false;
- if(event.kind==='dm'&&flow.response_kind!=='message'||event.kind==='comment'&&!['public_reply','private_reply'].includes(flow.response_kind)||typeof flow.response_text!=='string'||!flow.response_text.trim()||flow.response_text.length>2000)return false;
+ if(flow.response_kind==='graph'){if(!flow.graph||!validateFacebookGraph(JSON.parse(flow.graph)).ok)return false;}
+ else if(event.kind==='dm'&&flow.response_kind!=='message'||event.kind==='comment'&&!['public_reply','private_reply'].includes(flow.response_kind)||typeof flow.response_text!=='string'||!flow.response_text.trim()||flow.response_text.length>2000)return false;
  if(flow.trigger_type.endsWith('_any'))return true;
  try{const keywords=JSON.parse(flow.keywords);return Array.isArray(keywords)&&keywords.some(k=>typeof k==='string'&&clean(k)&&clean(event.text).includes(clean(k)));}catch{return false;}
 }
@@ -71,15 +73,34 @@ export async function acceptFacebookWebhook(body,env){
   const consent=await env.DB.prepare('SELECT opted_out FROM facebook_contacts WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).first();
   if(!facebookSendsEnabled(env,account.workspace_id)||consent?.opted_out||windowError(event)||!await facebookAccess(env,account.workspace_id))return J({received:true,queued:0});
   if(event.kind==='dm'&&await threadPaused(env,account,event.conversation_id,event.at))return J({received:true,queued:0});
-  const flows=await rows(env.DB.prepare('SELECT * FROM facebook_flows WHERE account_id=? AND workspace_id=? AND enabled=1 ORDER BY trigger_type DESC,id LIMIT 100').bind(account.id,account.workspace_id));
-  const flow=flows.filter(f=>matches(f,event)&&(!f.published_at||event.at>=f.published_at)).sort((a,b)=>Number(b.trigger_type.endsWith('_keyword'))-Number(a.trigger_type.endsWith('_keyword'))||a.id.localeCompare(b.id))[0];
+  // A contact answering a conversation that is waiting on a reply continues that graph first.
+  let flow=null,plan=null;
+  if(event.kind==='dm'){
+   const session=await env.DB.prepare('SELECT * FROM facebook_sessions WHERE account_id=? AND recipient_hash=? AND expires_at>?').bind(account.id,recipient,Date.now()).first();
+   const resumed=session&&await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=? AND account_id=? AND enabled=1 AND version=?').bind(session.flow_id,account.id,session.flow_version).first();
+   if(resumed){flow=resumed;plan={session:true,...walkFacebookGraph(JSON.parse(flow.graph),session.node_id,{text:event.text,payload:event.payload})};}
+  }
+  if(!flow){
+   const flows=await rows(env.DB.prepare('SELECT * FROM facebook_flows WHERE account_id=? AND workspace_id=? AND enabled=1 ORDER BY trigger_type DESC,id LIMIT 100').bind(account.id,account.workspace_id));
+   flow=flows.filter(f=>matches(f,event)&&(!f.published_at||event.at>=f.published_at)).sort((a,b)=>Number(b.trigger_type.endsWith('_keyword'))-Number(a.trigger_type.endsWith('_keyword'))||a.id.localeCompare(b.id))[0];
+   if(flow?.response_kind==='graph'){const graph=JSON.parse(flow.graph);plan={session:false,...walkFacebookGraph(graph,graph.start,{text:event.text,payload:event.payload})};}
+  }
   if(!flow)return J({received:true,queued:0});
+  if(plan){
+   // A comment allows one private reply; Messenger continues only once the person answers it.
+   if(event.kind==='comment'){const opening=commentOpening(plan.actions);plan={session:false,actions:opening?[opening]:[],wait:null};}
+   if(!plan.actions.length&&!plan.wait){await env.DB.prepare('DELETE FROM facebook_sessions WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).run();return J({received:true,queued:0});}
+  }
   const id=await sha('facebook:'+account.id+':'+event.key),now=Date.now(),job=await sha('facebook-job:'+id);
-  const payload=await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),action=await encryptToken(JSON.stringify({event,kind:flow.response_kind,text:flow.response_text}),env.TOKEN_ENCRYPTION_KEY);
+  const payload=await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),action=await encryptToken(JSON.stringify(plan?{event,kind:'graph',session:plan.session,actions:plan.actions}:{event,kind:flow.response_kind,text:flow.response_text}),env.TOKEN_ENCRYPTION_KEY);
   const result=await env.DB.batch([
    env.DB.prepare('INSERT OR IGNORE INTO facebook_events(id,workspace_id,account_id,encrypted_event,event_at,received_at) VALUES(?,?,?,?,?,?)').bind(id,account.workspace_id,account.id,payload,event.at,now),
    env.DB.prepare('INSERT OR IGNORE INTO facebook_jobs(id,event_id,workspace_id,account_id,flow_id,flow_version,encrypted_action,due_at,recipient_hash,conversation_hash) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(job,id,account.workspace_id,account.id,flow.id,flow.version,action,now,recipient,event.conversation_id?await sha(account.id+':'+event.conversation_id):null)
   ]);
+  if(plan&&event.kind==='dm'&&changes(result[1])){
+   if(plan.wait)await env.DB.prepare('INSERT INTO facebook_sessions(account_id,recipient_hash,flow_id,flow_version,node_id,expires_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(account_id,recipient_hash) DO UPDATE SET flow_id=excluded.flow_id,flow_version=excluded.flow_version,node_id=excluded.node_id,expires_at=excluded.expires_at,updated_at=excluded.updated_at').bind(account.id,recipient,flow.id,flow.version,plan.wait.on_reply,now+Math.min(86400,Number(plan.wait.timeout_seconds)||86400)*1000,now).run();
+   else await env.DB.prepare('DELETE FROM facebook_sessions WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).run();
+  }
   return J({received:true,queued:changes(result[1])});
  }catch{return J({error:'facebook_queue_unavailable'},503);}
 }
@@ -110,7 +131,8 @@ export async function processFacebookJobs(env,limit=5,deadline=Date.now()+8000){
    if(!account||account.status!=='connected'||!flow?.enabled||flow.version!==job.flow_version||!await facebookAccess(env,job.workspace_id)){await finish(env,job.id,'cancelled','automation_disabled');continue;}
    const action=JSON.parse(await decryptToken(job.encrypted_action,env.TOKEN_ENCRYPTION_KEY)),event=action.event;
    eventAt=event?.at;
-   if(!event||!matches(flow,event)||action.kind!==flow.response_kind||action.text!==flow.response_text||flow.published_at&&event.at<flow.published_at||!Number.isFinite(event.at)||event.at>Date.now()+300000)throw Error('invalid_action');
+   const graphJob=action.kind==='graph';
+   if(!event||(graphJob?flow.response_kind!=='graph'||!Array.isArray(action.actions)||!action.actions.length||!action.session&&!matches(flow,event):!matches(flow,event)||action.kind!==flow.response_kind||action.text!==flow.response_text)||flow.published_at&&event.at<flow.published_at||!Number.isFinite(event.at)||event.at>Date.now()+300000)throw Error('invalid_action');
    const consent=await env.DB.prepare('SELECT opted_out FROM facebook_contacts WHERE account_id=? AND recipient_hash=?').bind(account.id,await contactHash(account,event)).first();
    if(consent?.opted_out)throw Error('contact_opted_out');
    if(event.kind==='dm'&&await threadPaused(env,account,event.conversation_id,event.at))throw Error('thread_standby');
@@ -122,19 +144,26 @@ export async function processFacebookJobs(env,limit=5,deadline=Date.now()+8000){
    const claim=await env.DB.prepare("UPDATE facebook_jobs SET status='sending',lease_id=?,lease_until=?,attempt_at=?,attempts=attempts+1 WHERE id=? AND status='pending' AND NOT EXISTS(SELECT 1 FROM facebook_threads t WHERE t.account_id=facebook_jobs.account_id AND t.conversation_hash=facebook_jobs.conversation_hash AND (t.standby=1 OR t.last_control_at>=?)) AND (SELECT COUNT(*) FROM facebook_jobs q WHERE q.workspace_id=? AND q.status IN ('sending','accepted','unknown') AND q.attempt_at>=?)<?").bind(lease,now+60000,now,job.id,event.at,job.workspace_id,month,facebookMonthlyLimit(env)).run();
    if(!changes(claim)){const current=await env.DB.prepare('SELECT status FROM facebook_jobs WHERE id=?').bind(job.id).first();if(current?.status==='pending'){const paused=await threadPaused(env,account,event.conversation_id,event.at);await finish(env,job.id,paused?'paused':'failed',paused?'thread_standby':'facebook_message_limit');}continue;}
    reserved=true;ownedLease=lease;summary.processed++;
-   if(action.kind==='private_reply'){
+   if(action.kind==='private_reply'||graphJob&&action.actions.some(a=>a.type==='private_reply')){
     const effect=await sha('facebook-private:'+account.id+':'+event.comment_id);
     const held=await env.DB.prepare('INSERT OR IGNORE INTO facebook_effects(effect_key,job_id) VALUES(?,?)').bind(effect,job.id).run();
     const existing=await env.DB.prepare('SELECT job_id FROM facebook_effects WHERE effect_key=?').bind(effect).first();
     if(!changes(held)&&existing?.job_id!==job.id)throw Error('private_reply_already_sent');
    }
-   let path,body={accountId:account.remote_id,message:action.text};
-   if(event.kind==='dm')path='inbox/conversations/'+encodeURIComponent(event.conversation_id)+'/messages';
-   else{path='inbox/comments/'+encodeURIComponent(event.post_id);if(action.kind==='private_reply')path+='/'+encodeURIComponent(event.comment_id)+'/private-reply';else body.commentId=event.comment_id;}
-   attempted=true;
-   const result=await zernioRequest({...env,RUNTIME_DEADLINE_MS:deadline},path,{method:'POST',body});
-   const provider=result.data?.messageId||result.data?.commentId||result.messageId||result.message?.platformMessageId||result.message?.id||result.comment?.id||result.id;
-   if(typeof provider!=='string'||!provider.trim())throw Error('delivery_unknown');
+   const providerId=result=>result.data?.messageId||result.data?.commentId||result.messageId||result.message?.platformMessageId||result.message?.id||result.comment?.id||result.id;
+   let provider;
+   if(graphJob){
+    // Messages of one step go out in order; a failure after the first acceptance is uncertain, never resent.
+    for(const step of action.actions){const request=facebookActionBody(account,event,step);attempted=true;const result=await zernioRequest({...env,RUNTIME_DEADLINE_MS:deadline},request.path,{method:'POST',body:request.body});provider=providerId(result);if(typeof provider!=='string'||!provider.trim())throw Error('delivery_unknown');}
+   }else{
+    let path,body={accountId:account.remote_id,message:action.text};
+    if(event.kind==='dm')path='inbox/conversations/'+encodeURIComponent(event.conversation_id)+'/messages';
+    else{path='inbox/comments/'+encodeURIComponent(event.post_id);if(action.kind==='private_reply')path+='/'+encodeURIComponent(event.comment_id)+'/private-reply';else body.commentId=event.comment_id;}
+    attempted=true;
+    const result=await zernioRequest({...env,RUNTIME_DEADLINE_MS:deadline},path,{method:'POST',body});
+    provider=providerId(result);
+    if(typeof provider!=='string'||!provider.trim())throw Error('delivery_unknown');
+   }
    await finish(env,job.id,'accepted',null,provider,ownedLease);summary.accepted++;
   }catch(error){
    if(['processing_deferred','meta_rate_limited'].includes(error.message)&&reserved){
