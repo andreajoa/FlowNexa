@@ -383,3 +383,18 @@ test('agent copies an Instagram graph to the Facebook Page as a draft and publis
  assert.equal(listed.pages[0].name, 'Brand'); assert.equal(listed.flows[0].enabled, true);
  await assert.rejects(client.facebookImport({ instagram_flow_id: 'missing' }), /facebook_source_not_found/);
 });
+
+test('remote MCP over HTTP: key required, initialize, tools/list and tools/call run against the workspace', async (t) => {
+ const { env } = setup(t);
+ const sessionToken = await sessionFor('u1', env);
+ const created = await (await app.fetch(new Request('https://app.test/api/agent-tokens', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://app.test', cookie: `fn_session=${sessionToken}` }, body: JSON.stringify({ workspace_id: 'w1', name: 'Remote' }) }), env)).json();
+ const rpc = (body, key = created.token) => app.fetch(new Request('https://app.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { authorization: 'Bearer ' + key } : {}) }, body: JSON.stringify(body) }), env);
+ assert.equal((await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize' }, null)).status, 401);
+ assert.equal((await (await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize' })).json()).result.serverInfo.name, 'flownexa-mcp');
+ assert.equal((await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
+ const tools = (await (await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json()).result.tools.map(x => x.name);
+ assert.ok(tools.includes('flownexa_get_overview') && tools.includes('flownexa_facebook_import_instagram_flow'));
+ const call = await (await rpc({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'flownexa_list_flows', arguments: {} } })).json();
+ assert.equal(JSON.parse(call.result.content[0].text).flows[0].name, 'Fluxo Principal');
+ assert.equal((await app.fetch(new Request('https://app.test/mcp'), env)).status, 405);
+});

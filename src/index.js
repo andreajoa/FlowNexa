@@ -15,6 +15,7 @@ import {enqueueWebhook,processPending} from './automation-engine.js';
 import {respond as json,sha} from './identity.js';
 import {messagingReady} from './meta-client.js';
 import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
+import {mcpHttp} from './mcp-http.js';
 export const TEMPLATES=[{id:'comment-link',name:'Comentou QUERO',trigger_type:'comment_keyword',scope:'selected',configuration:{keywords:['QUERO'],actions:[{type:'private_reply',text:'Aqui está o link solicitado.'}]}}];
 export function keywordMatch(content,words){const text=String(content||'').normalize('NFKC').toLocaleUpperCase('pt-BR');return Array.isArray(words)&&words.some(w=>String(w).trim()&&text.includes(String(w).normalize('NFKC').toLocaleUpperCase('pt-BR')))}
 export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==='selected'&&Array.isArray(selected)&&selected.includes(mediaId)}
@@ -28,8 +29,9 @@ async function processQueue(env){
  return{...queue,conversations};
 }
 
-export default {async fetch(request,env,ctx={}){
+const app={async fetch(request,env,ctx={}){
  const url=new URL(request.url),path=url.pathname;
+ if(path==='/mcp')return mcpHttp(request,env,(req,e)=>app.fetch(req,e));
  const legal=legalPage(path);if(legal&&request.method==='GET')return new Response(legal,{headers:{'content-type':'text/html; charset=utf-8','x-content-type-options':'nosniff'}});
  if(request.method==='GET'&&['/app','/app/','/app.js'].includes(path)){
   const script=path==='/app.js';return new Response(script?appClient():appPage(),{headers:{'content-type':script?'application/javascript; charset=utf-8':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; connect-src 'self' https://api.stripe.com https://r.stripe.com https://m.stripe.network https://checkout.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}});
@@ -71,3 +73,4 @@ export default {async fetch(request,env,ctx={}){
  }
  return json({error:'not_found'},404);
 }};
+export default app;

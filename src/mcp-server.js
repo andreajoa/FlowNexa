@@ -132,9 +132,10 @@ export const MCP_TOOLS = [
 ];
 
 export class FlowNexaMcpClient {
- constructor({ baseUrl = 'https://flownex.online', apiKey }) {
+ constructor({ baseUrl = 'https://flownex.online', apiKey, fetchImpl }) {
   this.baseUrl = baseUrl.replace(/\/+$/, '');
   this.apiKey = apiKey;
+  this.fetchImpl = fetchImpl || ((url, options) => fetch(url, options));
  }
 
  async request(path, options = {}) {
@@ -143,7 +144,7 @@ export class FlowNexaMcpClient {
    'Content-Type': 'application/json',
    ...options.headers
   };
-  const res = await fetch(`${this.baseUrl}${path}`, {
+  const res = await this.fetchImpl(`${this.baseUrl}${path}`, {
    ...options,
    headers
   });
