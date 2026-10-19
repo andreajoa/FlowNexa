@@ -80,3 +80,9 @@ test('Facebook Login for Business uses the saved configuration instead of scopes
  const u=new URL(metaAuthorizationUrl({FACEBOOK_APP_ID:'1',FACEBOOK_LOGIN_CONFIG_ID:'987'},origin,'s'));
  assert.equal(u.searchParams.get('config_id'),'987');assert.equal(u.searchParams.has('scope'),false);
 });
+
+test('FACEBOOK_CONNECTION_PROVIDER=zernio sends new Pages through Zernio',async t=>{
+ const f=await fixture(t);f.env.FACEBOOK_CONNECTION_PROVIDER='zernio';
+ f.env.ZERNIO_FETCH=async(input,options={})=>{const u=new URL(input);if(u.pathname==='/api/v1/profiles')return(options.method||'GET')==='GET'?Response.json({profiles:[]}):Response.json({profile:{_id:'d'.repeat(24),externalId:JSON.parse(options.body).externalId}});if(u.pathname==='/api/v1/accounts')return Response.json({accounts:[]});if(u.pathname==='/api/v1/connect/facebook')return Response.json({authUrl:'https://zernio.com/connect/x'});throw Error('unexpected '+u.pathname);};
+ const r=await facebookApi(f.request('/api/facebook/connect?workspace=w'),f.env);assert.equal(r.status,200);assert.equal(new URL((await r.json()).authorization_url).hostname,'zernio.com');
+});

@@ -117,7 +117,9 @@ export async function facebookApi(request,env){
   if(path==='/api/facebook/executions'&&request.method==='GET')return J({executions:(await env.DB.prepare('SELECT id,flow_id,status,error,attempt_at,completed_at FROM facebook_jobs WHERE workspace_id=? ORDER BY rowid DESC LIMIT 50').bind(workspace).all()).results});
   if(!manage)throw fail('forbidden',403);
   // New Pages connect directly through the FlowNexa Meta app; Pages already on Zernio reconnect there.
-  if(path==='/api/facebook/connect'&&request.method==='GET'&&metaConfigured(env)){
+  // FACEBOOK_CONNECTION_PROVIDER=zernio routes new Pages through Zernio (approved app, paid per account)
+  // until FlowNexa's own Meta app passes App Review; any other value prefers the free direct Meta path.
+  if(path==='/api/facebook/connect'&&request.method==='GET'&&metaConfigured(env)&&env.FACEBOOK_CONNECTION_PROVIDER!=='zernio'){
    const reconnect=url.searchParams.get('reconnect_id'),existing=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
    if(!existing||reconnect&&reconnect===existing.id&&existing.provider==='meta'){
     if(existing&&!reconnect)throw fail('facebook_pilot_page_limit',409);
