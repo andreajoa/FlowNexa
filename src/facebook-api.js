@@ -39,7 +39,15 @@ export async function facebookApi(request,env){
    if(!facebookEnabled(env,row.workspace_id)||!await requireMembership(env.DB,user.id,row.workspace_id,['owner','admin']))throw fail('forbidden',403);
    const consumed=await env.DB.prepare('DELETE FROM facebook_oauth_states WHERE state_hash=? AND expires_at>?').bind(hash,nowSeconds()).run();if(!consumed.meta.changes)throw fail('state_used',403);
    if(!await facebookAccess(env,row.workspace_id))throw fail('billing_subscription_required',402);
-   const remoteId=url.searchParams.get('accountId');if(url.searchParams.has('error')||url.searchParams.get('connected')!=='facebook'||url.searchParams.get('profileId')!==row.profile_id||!oid(remoteId))throw fail('facebook_authorization_failed',400);
+   if(url.searchParams.has('error')){
+    const providerError=url.searchParams.get('error'),reason=url.searchParams.get('error_reason');
+    const knownErrors=['no_facebook_pages','oauth_denied','account_limit_exceeded','profile_limit_exceeded','payment_required','facebook_pages_error','token_exchange_failed'];
+    const knownReasons=['pages_permission_declined','no_pages_granted','granted_pages_not_listed'];
+    const requestId=url.searchParams.get('request_id');
+    console.warn(JSON.stringify({event:'facebook_oauth_failed',workspace_id:row.workspace_id,provider_error:knownErrors.includes(providerError)?providerError:'unknown_provider_error',reason:knownReasons.includes(reason)?reason:null,request_id:/^[a-zA-Z0-9_-]{1,100}$/.test(requestId||'')?requestId:null}));
+    throw fail(providerError==='no_facebook_pages'?'facebook_no_pages':providerError==='oauth_denied'?'facebook_authorization_denied':['account_limit_exceeded','profile_limit_exceeded','payment_required'].includes(providerError)?'facebook_provider_limit':'facebook_authorization_failed',409);
+   }
+   const remoteId=url.searchParams.get('accountId');if(url.searchParams.get('connected')!=='facebook'||url.searchParams.get('profileId')!==row.profile_id||!oid(remoteId))throw fail('facebook_authorization_failed',400);
    const result=await zernioRequest(env,'accounts?'+new URLSearchParams({profileId:row.profile_id,platform:'facebook'}));
    const remote=result.accounts?.find(a=>a._id===remoteId&&profileId(a.profileId)===row.profile_id&&a.platform==='facebook');
    const name=remote?.displayName||remote?.username;

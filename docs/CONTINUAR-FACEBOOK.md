@@ -34,3 +34,11 @@ Helpers temporários com credenciais só em memória: Vercel getpass `/tmp/flown
 Produção atual ainda Stripe `dpl_Euw1dSJEGfV12YD8mqtub51Hy6Hf`, `https://flownexa-fo9lyb9ua-flownexa3.vercel.app`, código `aed9016`, site `https://flownex.online`. Pro USD mensal990centavos, demais preços preservados; espaços existentes com acesso legado. PR16 de cobrança pronta para revisão, não mesclada. Preservar também PR15.
 
 Antes de publicar: salvar em commit/PR separados, criar release com flags sem enviar até Página validada, conferir saúde/JS/Stripe/Gilberto; promover só após verificação. Depois OAuth da Página AMB no seu workspace e uma interação real autorizada para validar entrega. Não declarar canal entregue ou testado com mensagem real antes disso.
+
+## Release e sessão correta confirmados
+
+Implementação commitada `7afe8c2`, branch enviada, PR https://github.com/andreajoa/FlowNexa/pull/17 (base PR16, rascunho até OAuth real). Release preparado READY `dpl_Hzu5Y7i5BqcND44Q6GZs6Yq813ea`, https://flownexa-hcvku5m22-flownexa3.vercel.app. Flags configuradas somente para workspace AMB `b83bd3c3-0897-4bd1-8a50-2cc5933418fb`, envios habilitados mas nenhuma Página/fluxo FB ainda existe. Stripe/Instagram env intactos.
+
+Proprietário abriu a aba certa e trocou a sessão. Conferência atual: workspace AMB BOUTIQUE `b83bd3c3-0897-4bd1-8a50-2cc5933418fb`, conta Instagram `ambb.outique` conectada. NÃO pedir login novamente. Próximo: terminar verificação remota do release, promover domínio e OAuth Facebook dessa sessão para AMB Boutique.
+
+API Zernio e sessão Chrome Zernio conferem: uma conta Instagram Gilberto; mesmo projeto correto. Atualização do webhook em andamento para adicionar só `conversation.control_changed` à união dos eventos existentes, sem segredo/destino alterado.
