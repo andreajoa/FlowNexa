@@ -152,7 +152,10 @@ export async function facebookApi(request,env){
   }
   if(path==='/api/facebook/meta/pages'&&request.method==='GET'){
    const pending=await env.DB.prepare('SELECT * FROM facebook_meta_pending WHERE user_id=? AND workspace_id=? AND expires_at>?').bind(user.id,workspace,nowSeconds()).first();
-   return J({pages:pending?(await openPages(env,pending.encrypted_pages)).map(p=>({id:p.id,name:p.name})):[]});
+   // A workspace that already has a Page (reconnect or migration) only ever sees that same Page.
+   const current=await env.DB.prepare('SELECT native_id FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
+   const pages=pending?(await openPages(env,pending.encrypted_pages)).filter(p=>!current||p.id===current.native_id):[];
+   return J({pages:pages.map(p=>({id:p.id,name:p.name}))});
   }
   if(path==='/api/facebook/meta/select'&&request.method==='POST'){
    if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);

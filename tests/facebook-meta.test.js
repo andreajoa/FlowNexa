@@ -94,6 +94,7 @@ test('owner Page on Zernio migrates in place to Meta: same account and flows, Ze
  const start=await facebookApi(f.request('/api/facebook/connect?workspace=amb&reconnect_id=z&migrate=1'),f.env);assert.equal(start.status,200);
  const state=new URL((await start.json()).authorization_url).searchParams.get('state');
  assert.equal((await facebookApi(f.request('/api/facebook/meta/callback?code=abc&state='+encodeURIComponent(state)),f.env)).status,302);
+ assert.deepEqual(await(await facebookApi(f.request('/api/facebook/meta/pages?workspace=amb'),f.env)).json(),{pages:[{id:'111',name:'Atenza'}]});
  assert.equal((await facebookApi(f.request('/api/facebook/meta/select',{workspace_id:'amb',page_id:'111'}),f.env)).status,200);
  const account=f.db.sqlite.prepare('SELECT * FROM facebook_accounts').get();assert.equal(account.id,'z');assert.equal(account.provider,'meta');assert.equal(account.remote_id,'meta:111');
  assert.equal(f.db.sqlite.prepare("SELECT account_id FROM facebook_flows WHERE id='jasmin'").get().account_id,'z');
