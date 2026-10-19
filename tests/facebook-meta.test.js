@@ -62,3 +62,15 @@ test('a Page already on Zernio keeps reconnecting through Zernio',async t=>{
  const r=await facebookApi(f.request('/api/facebook/connect?workspace=amb'),f.env);assert.equal(r.status,409);assert.equal((await r.json()).error,'facebook_pilot_page_limit');
  assert.equal(f.calls.length,0);
 });
+test('own Meta app: credentials validated, Page subscribed, webhooks verified with that app secret',async t=>{
+ const f=await fixture(t);const own='a'.repeat(32);
+ const base=f.env.FACEBOOK_GRAPH_FETCH;f.env.FACEBOOK_GRAPH_FETCH=async(input,options={})=>{const u=new URL(input);if(u.pathname.endsWith('/333')&&(options.method||'GET')==='GET')return u.searchParams.get('access_token')==='own-page-token-xyz123'?Response.json({id:'333',name:'Client Shop'}):Response.json({error:{code:190}},{status:400});if(u.pathname.endsWith('/333/subscribed_apps'))return Response.json({success:true});return base(input,options);};
+ assert.equal((await facebookApi(f.request('/api/facebook/byo',{workspace_id:'w',page_id:'333',page_token:'wrong-token-1234567890',app_secret:own}),f.env)).status,400);
+ const ok=await facebookApi(f.request('/api/facebook/byo',{workspace_id:'w',page_id:'333',page_token:'own-page-token-xyz123',app_secret:own}),f.env);assert.equal(ok.status,200);
+ const account=f.db.sqlite.prepare('SELECT * FROM facebook_accounts').get();assert.equal(account.provider,'meta_byo');assert.notEqual(account.encrypted_app_secret,own);
+ const setup=await(await facebookApi(f.request('/api/facebook/byo/setup?workspace=w'),f.env)).json();assert.equal(setup.webhook_url,origin+'/webhooks/facebook');assert.equal(setup.verify_token,'verify-me');
+ const body={object:'page',entry:[{id:'333',time:Date.now(),messaging:[]}]},raw=JSON.stringify(body);
+ const withSecret=key=>new Request(origin+'/webhooks/facebook',{method:'POST',headers:{'x-hub-signature-256':'sha256='+createHmac('sha256',key).update(raw).digest('hex')},body:raw});
+ assert.equal((await metaFacebookWebhook(withSecret(secret),f.env)).status,401);
+ assert.equal((await metaFacebookWebhook(withSecret(own),f.env)).status,200);
+});

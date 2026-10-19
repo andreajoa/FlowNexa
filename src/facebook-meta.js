@@ -110,3 +110,13 @@ export async function metaSend(env,account,event,step,deadline){
  const result=await metaGraph({...env,RUNTIME_DEADLINE_MS:deadline},request.path,{method:'POST',body:request.body,token:await pageToken(env,account)});
  return result.message_id||result.id;
 }
+
+// Bring-your-own Meta app (same model as Atenza's WhatsApp): the customer's own app signs the
+// webhooks, so FlowNexa needs no App Review to serve them. Validates the Page token before saving.
+export async function validateOwnApp(env,{page_id,page_token}){
+ if(!/^\d{1,40}$/.test(page_id||'')||typeof page_token!=='string'||page_token.length<20||page_token.length>1000)throw Error('facebook_invalid_credentials');
+ let page;try{page=await metaGraph(env,page_id,{params:{fields:'id,name'},token:page_token});}catch{throw Error('facebook_invalid_credentials');}
+ if(page.id!==page_id||typeof page.name!=='string')throw Error('facebook_invalid_credentials');
+ return{id:page.id,name:page.name.slice(0,200),token:page_token};
+}
+export function webhookPageIds(body){return body?.object==='page'&&Array.isArray(body.entry)?[...new Set(body.entry.map(e=>e?.id).filter(id=>typeof id==='string'))]:[];}

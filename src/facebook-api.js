@@ -1,6 +1,6 @@
 import {validateFacebookGraph} from './facebook-graph.js';
 import {encryptToken} from './instagram-oauth.js';
-import {metaConfigured,metaAuthorizationUrl,metaPagesFromCode,subscribeMetaPage,sealPages,openPages} from './facebook-meta.js';
+import {metaConfigured,metaAuthorizationUrl,metaPagesFromCode,subscribeMetaPage,sealPages,openPages,validateOwnApp} from './facebook-meta.js';
 import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds,sameOrigin,payload} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
@@ -126,6 +126,22 @@ export async function facebookApi(request,env){
     await env.DB.prepare('INSERT INTO facebook_oauth_states(state_hash,user_id,workspace_id,profile_id,reconnect_id,expires_at) VALUES(?,?,?,?,?,?)').bind(hash,user.id,workspace,'meta',reconnect||null,nowSeconds()+600).run();
     return J({authorization_url:metaAuthorizationUrl(env,url.origin,state)});
    }
+  }
+  // Own Meta app (open to every customer without FlowNexa App Review), like Atenza's WhatsApp.
+  if(path==='/api/facebook/byo/setup'&&request.method==='GET')return J({webhook_url:new URL('/webhooks/facebook',url.origin).href,verify_token:env.FACEBOOK_VERIFY_TOKEN||null,fields:['messages','messaging_postbacks','feed'],permissions:['pages_messaging','pages_manage_metadata','pages_read_engagement','pages_manage_engagement','pages_show_list']});
+  if(path==='/api/facebook/byo'&&request.method==='POST'){
+   if(!env.TOKEN_ENCRYPTION_KEY||!env.FACEBOOK_VERIFY_TOKEN)throw fail('facebook_not_configured',503);
+   if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
+   if(typeof body.app_secret!=='string'||!/^[a-f0-9]{32}$/i.test(body.app_secret.trim()))throw fail('facebook_invalid_credentials');
+   let page;try{page=await validateOwnApp(env,{page_id:String(body.page_id||'').trim(),page_token:String(body.page_token||'').trim()});}catch{throw fail('facebook_invalid_credentials');}
+   const existing=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
+   if(existing&&(existing.native_id!==page.id||existing.provider==='zernio'))throw fail('facebook_pilot_page_limit',409);
+   const elsewhere=await env.DB.prepare('SELECT workspace_id FROM facebook_accounts WHERE native_id=? AND workspace_id<>?').bind(page.id,workspace).first();if(elsewhere)throw fail('facebook_page_already_connected',409);
+   try{await subscribeMetaPage(env,page);}catch(e){console.warn(JSON.stringify({event:'facebook_byo_subscribe_failed',workspace_id:workspace,error:e.message}));throw fail('facebook_subscription_failed',409);}
+   const token=await encryptToken(page.token,env.TOKEN_ENCRYPTION_KEY),secret=await encryptToken(body.app_secret.trim(),env.TOKEN_ENCRYPTION_KEY);
+   if(existing)await env.DB.prepare("UPDATE facebook_accounts SET name=?,encrypted_token=?,encrypted_app_secret=?,provider='meta_byo',status='connected' WHERE id=?").bind(page.name,token,secret,existing.id).run();
+   else await env.DB.prepare("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at,provider,encrypted_token,encrypted_app_secret) VALUES(?,?,?,?,?,?,'connected',?,'meta_byo',?,?)").bind(crypto.randomUUID(),workspace,'meta:'+page.id,'meta',page.id,page.name,nowSeconds(),token,secret).run();
+   return J({connected:true,page:{id:page.id,name:page.name}});
   }
   if(path==='/api/facebook/meta/pages'&&request.method==='GET'){
    const pending=await env.DB.prepare('SELECT * FROM facebook_meta_pending WHERE user_id=? AND workspace_id=? AND expires_at>?').bind(user.id,workspace,nowSeconds()).first();

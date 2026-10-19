@@ -3,7 +3,7 @@ import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
 import {normalizeFacebook} from './facebook-webhook.js';
-import {verifyMetaSignature,normalizeMetaEntry,metaSend} from './facebook-meta.js';
+import {verifyMetaSignature,normalizeMetaEntry,metaSend,webhookPageIds} from './facebook-meta.js';
 import {walkFacebookGraph,commentOpening,facebookActionBody,validateFacebookGraph} from './facebook-graph.js';
 const rows=async statement=>(await statement.all()).results||[];
 const changes=result=>Number(result?.meta?.changes||0);
@@ -76,14 +76,20 @@ export async function metaFacebookWebhook(request,env){
  }
  if(request.method!=='POST')return J({error:'method_not_allowed'},405);
  const raw=new Uint8Array(await request.arrayBuffer());if(raw.byteLength>1048576)return J({error:'payload_too_large'},413);
- if(!await verifyMetaSignature(raw,request.headers.get('x-hub-signature-256'),env.FACEBOOK_APP_SECRET))return J({error:'invalid_signature'},401);
  let body;try{body=JSON.parse(new TextDecoder().decode(raw));}catch{return J({error:'invalid_payload'},400);}
- if(body?.object!=='page'||!Array.isArray(body.entry)||env.FACEBOOK_CHANNEL_ENABLED!=='true'||!env.DB||!env.TOKEN_ENCRYPTION_KEY)return J({received:true,queued:0});
+ if(env.FACEBOOK_CHANNEL_ENABLED!=='true'||!env.DB||!env.TOKEN_ENCRYPTION_KEY)return J({received:true,queued:0});
  try{
-  await ensureFacebookSchema(env);let queued=0;
+  await ensureFacebookSchema(env);
+  // One delivery comes from one app: the FlowNexa app, or the customer's own app that signs with its secret.
+  // The body is only used to pick the secret; nothing is processed before the signature matches.
+  const ids=webhookPageIds(body),byo=ids.length?await env.DB.prepare("SELECT encrypted_app_secret FROM facebook_accounts WHERE native_id=? AND provider='meta_byo'").bind(ids[0]).first():null;
+  const secret=byo?.encrypted_app_secret?await decryptToken(byo.encrypted_app_secret,env.TOKEN_ENCRYPTION_KEY):env.FACEBOOK_APP_SECRET;
+  if(!await verifyMetaSignature(raw,request.headers.get('x-hub-signature-256'),secret))return J({error:'invalid_signature'},401);
+  if(body?.object!=='page'||!Array.isArray(body.entry))return J({received:true,queued:0});
+  let queued=0;const provider=byo?'meta_byo':'meta';
   for(const entry of body.entry.slice(0,100)){
    if(typeof entry?.id!=='string')continue;
-   const account=await env.DB.prepare("SELECT * FROM facebook_accounts WHERE native_id=? AND provider='meta'").bind(entry.id).first();
+   const account=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE native_id=? AND provider=?').bind(entry.id,provider).first();
    if(!account||account.status!=='connected'||!facebookEnabled(env,account.workspace_id))continue;
    for(const event of normalizeMetaEntry(entry,account))queued+=await queueFacebookEvent(env,account,event);
   }
@@ -181,7 +187,7 @@ export async function processFacebookJobs(env,limit=5,deadline=Date.now()+8000){
    }
    const providerId=result=>result.data?.messageId||result.data?.commentId||result.messageId||result.message?.platformMessageId||result.message?.id||result.comment?.id||result.id;
    let provider;
-   if(account.provider==='meta'){
+   if(account.provider==='meta'||account.provider==='meta_byo'){
     const steps=graphJob?action.actions:[{type:event.kind==='dm'?'message':action.kind,text:action.text}];
     for(const step of steps){attempted=true;provider=await metaSend(env,account,event,step,deadline);if(typeof provider!=='string'||!provider.trim())throw Error('delivery_unknown');}
    }else if(graphJob){
