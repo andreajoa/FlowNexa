@@ -341,3 +341,26 @@ test('FlowNexaMcpClient roundtrip: list, get, and update graph via MCP tools', a
  const tmplData = JSON.parse(tmplMcpRes.result.content[0].text);
  assert.equal(tmplData.limits.max_nodes, 30);
 });
+
+test('agent overview and activity report only the token workspace, read-only', async (t) => {
+ const { db, env } = setup(t);
+ const sessionToken = await sessionFor('u1', env);
+ const created = await (await app.fetch(new Request('https://app.test/api/agent-tokens', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://app.test', cookie: `fn_session=${sessionToken}` }, body: JSON.stringify({ workspace_id: 'w1', name: 'Report' }) }), env)).json();
+ db.sqlite.exec(`INSERT INTO instagram_accounts(id, workspace_id, username, ig_user_id, status) VALUES ('a2', 'w2', 'other', '200', 'connected');
+  INSERT INTO flows(id, workspace_id, account_id, name, trigger_type, scope, configuration, enabled) VALUES ('f2', 'w2', 'a2', 'Other', 'comment_any', 'all', '{}', 1);
+  INSERT INTO automation_events(id, account_id, workspace_id, encrypted_event, received_at, event_at, status, due_at) VALUES ('e1', 'a1', 'w1', 'x', ${Date.now()}, ${Date.now()}, 'completed', 0), ('e2', 'a2', 'w2', 'x', ${Date.now()}, ${Date.now()}, 'completed', 0);
+  INSERT INTO automation_jobs(id, event_id, account_id, workspace_id, flow_id, flow_version, action_index, action_type, effect_key, encrypted_action, status, provider_id, attempt_at, completed_at) VALUES ('j1', 'e1', 'a1', 'w1', 'f1', 1, 0, 'private_reply', 'k1', 'x', 'accepted', 'mid.1', ${Date.now()}, ${Date.now()}), ('j2', 'e2', 'a2', 'w2', 'f2', 1, 0, 'private_reply', 'k2', 'x', 'failed', null, ${Date.now()}, ${Date.now()});`);
+ const client = new FlowNexaMcpClient({ baseUrl: 'https://app.test', apiKey: created.token });
+ const realFetch = globalThis.fetch; globalThis.fetch = (url, options) => app.fetch(new Request(url, options), env); t.after(() => { globalThis.fetch = realFetch; });
+ const overview = await client.getOverview();
+ assert.equal(overview.workspace.id, 'w1');
+ assert.deepEqual(overview.accounts.instagram.map(a => a.username), ['brand']);
+ assert.equal(overview.flows.drafts, 1);
+ assert.equal(overview.access.active, true);
+ assert.deepEqual(overview.last_7_days.messages, [{ status: 'accepted', error: null, total: 1 }]);
+ const { activity } = await client.getActivity(10);
+ assert.deepEqual(activity.map(a => [a.id, a.flow_name, a.account, a.provider_id]), [['j1', 'Fluxo Principal', 'brand', 'mid.1']]);
+ assert.equal((await client.getActivity(10, 'failed')).activity.length, 0);
+ assert.ok(MCP_TOOLS.some(tool => tool.name === 'flownexa_get_overview'));
+ assert.equal((await app.fetch(new Request('https://app.test/api/v1/agent/overview'), env)).status, 401);
+});

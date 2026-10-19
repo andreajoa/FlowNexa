@@ -2,7 +2,7 @@ import {accountUsable} from './zernio-client.js';
 import {respond as J, sha, nowSeconds, getSessionUser, requireMembership, payload, sameOrigin} from './identity.js';
 import {validateGraph} from './conversation-graph.js';
 import {validateFlow} from './flow-runtime.js';
-import {billingAccess} from './billing.js';
+import {billingAccess, ownerExempt, workspacePlan, messageUsage} from './billing.js';
 import {messagingReady} from './meta-client.js';
 
 const editors = ['owner', 'admin'];
@@ -145,6 +145,45 @@ export async function agentRuntimeApi(request, env) {
     end: {id: 'end', type: 'end'}
    }
   });
+ }
+
+ // Read-only reporting for owners' agents: accounts, plan access, volume and outcomes.
+ if (path === '/api/v1/agent/overview' && request.method === 'GET') {
+  if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const ws = agent.workspaceId, now = Date.now(), day = 86400000;
+  const since = days => [now - days * day, Math.floor((now - days * day) / 1000)];
+  const safe = async (query, ...binds) => { try { return (await env.DB.prepare(query).bind(...binds).all()).results; } catch { return []; } };
+  const workspace = await env.DB.prepare('SELECT id, name, created_at FROM workspaces WHERE id = ?').bind(ws).first();
+  const instagram = await safe('SELECT id, username, status, token_expires_at, created_at FROM instagram_accounts WHERE workspace_id = ? ORDER BY created_at', ws);
+  const facebook = await safe('SELECT id, name, status, created_at FROM facebook_accounts WHERE workspace_id = ? ORDER BY created_at', ws);
+  const flows = await safe('SELECT enabled, count(*) AS total FROM flows WHERE workspace_id = ? GROUP BY enabled', ws);
+  const window = async days => {
+   const [ms, sec] = since(days);
+   const jobs = await safe('SELECT status, error, count(*) AS total FROM automation_jobs WHERE workspace_id = ? AND COALESCE(completed_at, attempt_at, 0) >= CASE WHEN COALESCE(completed_at, attempt_at, 0) > 100000000000 THEN ? ELSE ? END GROUP BY status, error ORDER BY total DESC', ws, ms, sec);
+   const events = await safe('SELECT status, count(*) AS total FROM automation_events WHERE workspace_id = ? AND received_at >= CASE WHEN received_at > 100000000000 THEN ? ELSE ? END GROUP BY status', ws, ms, sec);
+   const conversations = await safe('SELECT status, count(*) AS total FROM conversation_sessions WHERE workspace_id = ? AND created_at >= CASE WHEN created_at > 100000000000 THEN ? ELSE ? END GROUP BY status', ws, ms, sec);
+   return {events_received: events, messages: jobs, conversations};
+  };
+  const plan = await workspacePlan(env, ws);
+  let usage = null; try { usage = await messageUsage(env, ws); } catch {}
+  return J({
+   workspace,
+   accounts: {instagram, facebook},
+   flows: {published: flows.find(f => f.enabled)?.total || 0, drafts: flows.find(f => !f.enabled)?.total || 0},
+   access: {active: await billingAccess(env, ws), owner: await ownerExempt(env, ws), plan: plan ? {id: plan.id, accounts: plan.accounts, messages: plan.messages} : null, messaging_ready: messagingReady(env)},
+   usage_this_month: usage,
+   last_7_days: await window(7),
+   last_30_days: await window(30)
+  });
+ }
+
+ if (path === '/api/v1/agent/activity' && request.method === 'GET') {
+  if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200), status = url.searchParams.get('status');
+  const filter = status && /^[a-z_]{1,30}$/.test(status) ? ' AND j.status = ?' : '';
+  const binds = [agent.workspaceId, ...(filter ? [status] : []), limit];
+  const rows = await env.DB.prepare('SELECT j.id, j.flow_id, f.name AS flow_name, j.flow_version, j.action_type, j.status, j.error, j.provider_id, j.attempt_at, j.completed_at, a.username AS account FROM automation_jobs j JOIN flows f ON f.id = j.flow_id LEFT JOIN instagram_accounts a ON a.id = j.account_id WHERE j.workspace_id = ?' + filter + ' ORDER BY j.rowid DESC LIMIT ?').bind(...binds).all();
+  return J({activity: rows.results});
  }
 
  if (path === '/api/v1/agent/flows' && request.method === 'GET') {

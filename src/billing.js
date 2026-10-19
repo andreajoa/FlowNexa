@@ -44,8 +44,8 @@ export async function billingApi(request,env){
   if(url.pathname==='/api/billing/status'&&request.method==='GET'){
    const plans=cfg?await Promise.all(Object.entries(cfg.prices).map(async([id,priceId])=>{const p=await price(env,priceId);const definition=commercialPlans().find(plan=>plan.id===id);return{...(definition?{tier:definition.tier,accounts:definition.accounts,messages:definition.messages}:{}),id,name:definition?.name||p.nickname||(typeof p.product==='object'?p.product.name:null)||id,unit_amount:p.unit_amount,currency:p.currency,interval:p.recurring.interval,interval_count:p.recurring.interval_count};})):[];
    const currentPlan=await workspacePlan(env,workspace);const usage=currentPlan?{...await messageUsage(env,workspace),limit:currentPlan.messages}:null;
-   const legacy=env.BILLING_ENFORCED==='true'?await legacyBillingAccess(env,workspace):null,trial=env.BILLING_ENFORCED==='true'&&!legacy?await trialStatus(env,workspace):null;
-   return respond({configured:Boolean(cfg),can_manage:canManage,plans,subscription:subscription(row,cfg),...(usage?{usage}:{}),...(legacy!==null?{legacy_access:legacy}:{}),...(trial?{trial}:{})});
+   const owner=await ownerExempt(env,workspace),legacy=env.BILLING_ENFORCED==='true'?await legacyBillingAccess(env,workspace):null,trial=env.BILLING_ENFORCED==='true'&&!legacy&&!owner?await trialStatus(env,workspace):null;
+   return respond({configured:Boolean(cfg),can_manage:canManage,plans,subscription:subscription(row,cfg),...(usage?{usage}:{}),...(legacy!==null?{legacy_access:legacy}:{}),...(trial?{trial}:{}),...(owner?{owner_access:true}:{})});
   }
   if(request.method!=='POST'||!['/api/billing/checkout','/api/billing/portal'].includes(url.pathname))return respond({error:'not_found'},404);
   if(!canManage)return respond({error:'forbidden'},403);
@@ -149,6 +149,14 @@ export async function legacyBillingAccess(env,workspace){
  const timestamp=typeof row?.created_at==='string'?Date.parse(row.created_at.includes('T')?row.created_at:row.created_at.replace(' ','T')+'Z'):NaN;
  return Number.isFinite(timestamp)&&timestamp<cutoff;
 }
+// The owner's own profiles: full access with no charge and no plan limits. Matched on an
+// Instagram username in the workspace, which only the account holder can establish via OAuth.
+const listEnv=value=>(value||'').split(',').map(v=>v.trim().replace(/^@/,'').toLowerCase()).filter(Boolean);
+export async function ownerExempt(env,workspace){
+ if(!workspace)return false;if(listEnv(env.BILLING_EXEMPT_WORKSPACES).includes(workspace.toLowerCase()))return true;
+ const names=listEnv(env.BILLING_EXEMPT_INSTAGRAM);if(!names.length||!env.DB)return false;
+ try{return Boolean(await env.DB.prepare(`SELECT 1 FROM instagram_accounts WHERE workspace_id=? AND lower(username) IN (${names.map(()=>'?').join(',')}) LIMIT 1`).bind(workspace,...names).first());}catch{return false;}
+}
 // Free trial: full access (Teams account limit, capped messages) without a card, counted
 // from the owner's signup so creating another workspace cannot restart it.
 export async function trialStatus(env,workspace){
@@ -166,17 +174,18 @@ async function paidPlan(env,workspace){
  return commercialPlans().find(plan=>cfg.prices[plan.id]===row.stripe_price_id)||null;
 }
 async function activeTrial(env,workspace){
- if(env.BILLING_ENFORCED!=='true'||await legacyBillingAccess(env,workspace))return false;
+ if(env.BILLING_ENFORCED!=='true'||await legacyBillingAccess(env,workspace)||await ownerExempt(env,workspace))return false;
  return Boolean((await trialStatus(env,workspace))?.active);
 }
 export async function billingAccess(env,workspace){
  if(env.BILLING_ENFORCED!=='true')return true;
- if(await legacyBillingAccess(env,workspace))return true;
+ if(await legacyBillingAccess(env,workspace)||await ownerExempt(env,workspace))return true;
  const cfg=config(env);if(!env.DB||!workspace)return false;
  try{const row=cfg&&await env.DB.prepare('SELECT subscription_status,stripe_price_id,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();if(row&&['active','trialing'].includes(row.subscription_status)&&Object.values(cfg.prices).includes(row.stripe_price_id)&&row.current_period_end>nowSeconds())return true;return await activeTrial(env,workspace);}catch{return false;}
 }
 
 export async function workspacePlan(env,workspace){
+ if(await ownerExempt(env,workspace))return null;
  const paid=await paidPlan(env,workspace);if(paid)return paid;
  return env.DB&&workspace&&await activeTrial(env,workspace)?trialPlan(env):null;
 }

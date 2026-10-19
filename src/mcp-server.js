@@ -82,6 +82,22 @@ export const MCP_TOOLS = [
   }
  },
  {
+  name: 'flownexa_get_overview',
+  description: 'Report for this profile: connected Instagram/Facebook accounts and their status, published vs draft flows, plan access, messages used this month, and 7/30-day counts of events received, messages by status/error and conversations by status.',
+  inputSchema: { type: 'object', properties: {} }
+ },
+ {
+  name: 'flownexa_get_activity',
+  description: 'Most recent automation sends for this profile with flow name, action, status, error and Meta/provider message ID. Use to find failures or confirm a flow is firing.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    limit: { type: 'number', description: 'How many records (1-200, default 50).' },
+    status: { type: 'string', description: 'Optional filter, e.g. accepted, failed, unknown, cancelled.' }
+   }
+  }
+ },
+ {
   name: 'flownexa_get_node_templates',
   description: 'Get syntax templates and schema limits for conversation graph nodes (message, buttons, wait_reply, condition, switch, delay, end).',
   inputSchema: {
@@ -92,7 +108,7 @@ export const MCP_TOOLS = [
 ];
 
 export class FlowNexaMcpClient {
- constructor({ baseUrl = 'https://app.flownexa.online', apiKey }) {
+ constructor({ baseUrl = 'https://flownex.online', apiKey }) {
   this.baseUrl = baseUrl.replace(/\/+$/, '');
   this.apiKey = apiKey;
  }
@@ -134,6 +150,17 @@ export class FlowNexaMcpClient {
    method: 'POST',
    body: JSON.stringify({ enabled })
   });
+ }
+
+ async getOverview() {
+  return this.request('/api/v1/agent/overview');
+ }
+
+ async getActivity(limit, status) {
+  const query = new URLSearchParams();
+  if (limit) query.set('limit', String(limit));
+  if (status) query.set('status', status);
+  return this.request('/api/v1/agent/activity' + (query.size ? '?' + query : ''));
  }
 
  async getTemplates() {
@@ -205,6 +232,10 @@ async function executeToolCall(client, id, name, args) {
   } else if (name === 'flownexa_publish_flow') {
    const res = await client.publishFlow(args.flow_id, args.enabled);
    content = JSON.stringify(res, null, 2);
+  } else if (name === 'flownexa_get_overview') {
+   content = JSON.stringify(await client.getOverview(), null, 2);
+  } else if (name === 'flownexa_get_activity') {
+   content = JSON.stringify(await client.getActivity(args.limit, args.status), null, 2);
   } else if (name === 'flownexa_get_node_templates') {
    const res = await client.getTemplates();
    content = JSON.stringify(res, null, 2);

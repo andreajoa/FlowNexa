@@ -3,21 +3,25 @@
 /**
  * FlowNexa MCP Server Executable
  * Usage:
- *   node bin/flownexa-mcp.js --api-key fnx_agent_... [--base-url https://app.flownexa.online]
+ *   node bin/flownexa-mcp.js --api-key fnx_agent_... [--base-url https://flownex.online]
+ *   node bin/flownexa-mcp.js --api-key-file ~/.config/flownexa/agent-tokens/<profile>
  * Or via env:
  *   FLOWNEXA_API_KEY=fnx_agent_... node bin/flownexa-mcp.js
  */
 
 import readline from 'node:readline';
+import { readFileSync } from 'node:fs';
 import { FlowNexaMcpClient, handleMcpRequest } from '../src/mcp-server.js';
 
 let apiKey = process.env.FLOWNEXA_API_KEY || '';
-let baseUrl = process.env.FLOWNEXA_API_URL || 'https://app.flownexa.online';
+let baseUrl = process.env.FLOWNEXA_API_URL || 'https://flownex.online';
 
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
  if (args[i] === '--api-key' && args[i + 1]) {
   apiKey = args[++i];
+ } else if (args[i] === '--api-key-file' && args[i + 1]) {
+  apiKey = readFileSync(args[++i], 'utf8').trim();
  } else if (args[i] === '--base-url' && args[i + 1]) {
   baseUrl = args[++i];
  }

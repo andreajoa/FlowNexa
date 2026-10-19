@@ -91,3 +91,13 @@ test('new owners get a free trial with full access, capped like Teams, that cann
  assert.equal(await billingAccess(env,'workspace'),false);assert.equal(await billingAccess(env,'second'),false);assert.equal(await workspacePlan(env,'workspace'),null);
  env.BILLING_TRIAL_DAYS='0';await db.prepare("UPDATE users SET created_at=datetime('now') WHERE id='user'").run();assert.equal(await billingAccess(env,'workspace'),false);
 });
+test('owner profiles listed by Instagram username or workspace get full access with no charge and no limits',async t=>{
+ const{env,db,cookie}=await setup(t);db.sqlite.exec(readFileSync(new URL('../migrations/0005_runtime.sql',import.meta.url),'utf8'));Object.assign(env,{BILLING_ENFORCED:'true',BILLING_TRIAL_DAYS:'0',BILLING_EXEMPT_INSTAGRAM:'@Gilberto.Rebuild, ambb.outique'});
+ const{workspacePlan,ownerExempt}=await import('../src/billing.js');
+ assert.equal(await billingAccess(env,'workspace'),false);
+ await db.prepare("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,status) VALUES('ig','workspace','gilberto.rebuild','1','reconnect_required')").run();
+ assert.equal(await ownerExempt(env,'workspace'),true);assert.equal(await billingAccess(env,'workspace'),true);assert.equal(await workspacePlan(env,'workspace'),null);
+ delete env.STRIPE_SECRET_KEY;const status=await(await billingApi(request('/api/billing/status?workspace=workspace',null,cookie),env)).json();assert.equal(status.owner_access,true);assert.equal(status.trial,undefined);
+ await db.prepare("INSERT INTO workspaces(id,name,owner_id) VALUES('w2','Other','user')").run();assert.equal(await billingAccess(env,'w2'),false);
+ env.BILLING_EXEMPT_WORKSPACES='w2';assert.equal(await billingAccess(env,'w2'),true);
+});
