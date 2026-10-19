@@ -1,5 +1,6 @@
 import {withBillingAccountCapacity,billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,cookieToken} from './identity.js';
+import {zernioRequest} from './zernio-client.js';
 const json=(o,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const enc=new TextEncoder();
 const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
@@ -96,6 +97,14 @@ if(!await requireMembership(env.DB,user.id,stateRow.workspace_id,["owner","admin
 step='persistence';
 const saved=await withBillingAccountCapacity(env,stateRow.workspace_id,existing?.id,()=>env.DB.prepare("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,encrypted_token,token_expires_at,status) VALUES (?,?,?,?,?,?,'connected') ON CONFLICT(ig_user_id) DO UPDATE SET username=excluded.username,encrypted_token=excluded.encrypted_token,token_expires_at=excluded.token_expires_at,status='connected' WHERE instagram_accounts.workspace_id=excluded.workspace_id").bind(id,stateRow.workspace_id,profile.username,igId,encrypted,expire).run());
 if(!saved.meta.changes)return J({error:"instagram_account_already_connected_to_other_workspace"},409);
+// Moving the same profile off Zernio: its flows follow the new direct connection, the old one stops,
+// and the paid Zernio connection is released (best effort).
+const direct=await env.DB.prepare('SELECT id FROM instagram_accounts WHERE ig_user_id=?').bind(igId).first();
+const previous=direct&&await env.DB.prepare("SELECT id,ig_user_id FROM instagram_accounts WHERE workspace_id=? AND lower(username)=lower(?) AND ig_user_id LIKE 'zernio:%' AND id<>?").bind(stateRow.workspace_id,profile.username,direct.id).first();
+if(previous){
+ await env.DB.batch([env.DB.prepare('UPDATE flows SET account_id=? WHERE account_id=?').bind(direct.id,previous.id),env.DB.prepare("UPDATE instagram_accounts SET status='disconnected' WHERE id=?").bind(previous.id)]);
+ try{await zernioRequest(env,'accounts/'+encodeURIComponent(previous.ig_user_id.slice(7)),{method:'DELETE'});}catch(e){console.warn(JSON.stringify({event:'instagram_zernio_release_failed',workspace_id:stateRow.workspace_id,error:e.message}));}
+}
 return new Response(null,{status:302,headers:{"location":new URL("/app?connected=1",url.origin).toString(),"cache-control":"no-store"}});
 }catch{return failed('instagram_connection_failed');}
 }

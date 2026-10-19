@@ -3,6 +3,7 @@ import {encryptToken} from './instagram-oauth.js';
 import {metaConfigured,metaAuthorizationUrl,metaPagesFromCode,subscribeMetaPage,sealPages,openPages,validateOwnApp} from './facebook-meta.js';
 import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds,sameOrigin,payload} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
+import {ownerExempt} from './billing.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
 const oid=id=>typeof id==='string'&&/^[a-f0-9]{24}$/i.test(id);
 // Business-portfolio Pages come back as '<userId>:page:<pageId>'; webhooks identify the Page by pageId.
@@ -109,7 +110,7 @@ export async function facebookApi(request,env){
   const workspace=request.method==='GET'?url.searchParams.get('workspace'):body.workspace_id;
   const member=await requireMembership(env.DB,user.id,workspace);if(!member)throw fail('forbidden',403);
   const manage=['owner','admin'].includes(member.role),enabled=facebookEnabled(env,workspace);
-  if(path==='/api/facebook/status'&&request.method==='GET')return J({enabled,sends_enabled:facebookSendsEnabled(env,workspace),pilot:true,can_manage:manage,monthly_message_limit:facebookMonthlyLimit(env),description:'Facebook Pages e Messenger'});
+  if(path==='/api/facebook/status'&&request.method==='GET')return J({owner_direct:Boolean(await ownerExempt(env,workspace)&&metaConfigured(env)),enabled,sends_enabled:facebookSendsEnabled(env,workspace),pilot:true,can_manage:manage,monthly_message_limit:facebookMonthlyLimit(env),description:'Facebook Pages e Messenger'});
   if(!enabled)throw fail('facebook_not_available',404);
   await ensureFacebookSchema(env);
   if(path==='/api/facebook/accounts'&&request.method==='GET')return J({accounts:(await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? ORDER BY created_at').bind(workspace).all()).results.map(safeAccount)});
@@ -119,9 +120,13 @@ export async function facebookApi(request,env){
   // New Pages connect directly through the FlowNexa Meta app; Pages already on Zernio reconnect there.
   // FACEBOOK_CONNECTION_PROVIDER=zernio routes new Pages through Zernio (approved app, paid per account)
   // until FlowNexa's own Meta app passes App Review; any other value prefers the free direct Meta path.
-  if(path==='/api/facebook/connect'&&request.method==='GET'&&metaConfigured(env)&&env.FACEBOOK_CONNECTION_PROVIDER!=='zernio'){
+  // The owner's own workspaces always use the free direct path; a Zernio Page there can be migrated
+  // in place (same account row, so its automations stay). Customers follow FACEBOOK_CONNECTION_PROVIDER.
+  const owner=await ownerExempt(env,workspace);
+  if(path==='/api/facebook/connect'&&request.method==='GET'&&metaConfigured(env)&&(owner||env.FACEBOOK_CONNECTION_PROVIDER!=='zernio')){
    const reconnect=url.searchParams.get('reconnect_id'),existing=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
-   if(!existing||reconnect&&reconnect===existing.id&&existing.provider==='meta'){
+   const migrate=owner&&reconnect&&existing&&reconnect===existing.id&&existing.provider==='zernio'&&url.searchParams.get('migrate')==='1';
+   if(!existing||reconnect&&reconnect===existing.id&&existing.provider==='meta'||migrate){
     if(existing&&!reconnect)throw fail('facebook_pilot_page_limit',409);
     if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
     const state=crypto.randomUUID()+crypto.randomUUID(),hash=await sha(state+':'+cookieToken(request));
@@ -154,11 +159,16 @@ export async function facebookApi(request,env){
    const pending=await env.DB.prepare('SELECT * FROM facebook_meta_pending WHERE user_id=? AND workspace_id=? AND expires_at>?').bind(user.id,workspace,nowSeconds()).first();if(!pending)throw fail('facebook_selection_expired',409);
    const page=(await openPages(env,pending.encrypted_pages)).find(p=>p.id===body.page_id);if(!page)throw fail('facebook_page_not_found',404);
    const existing=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
-   if(existing&&(existing.native_id!==page.id||existing.provider!=='meta'))throw fail('facebook_pilot_page_limit',409);
+   const migrating=existing&&existing.provider==='zernio'&&existing.native_id===page.id&&await ownerExempt(env,workspace);
+   if(existing&&!migrating&&(existing.native_id!==page.id||existing.provider!=='meta'))throw fail('facebook_pilot_page_limit',409);
    const elsewhere=await env.DB.prepare('SELECT workspace_id FROM facebook_accounts WHERE native_id=? AND workspace_id<>?').bind(page.id,workspace).first();if(elsewhere)throw fail('facebook_page_already_connected',409);
    try{await subscribeMetaPage(env,page);}catch(e){console.warn(JSON.stringify({event:'facebook_meta_subscribe_failed',workspace_id:workspace,error:e.message}));throw fail('facebook_subscription_failed',409);}
    const sealed=await encryptToken(page.token,env.TOKEN_ENCRYPTION_KEY);
-   if(existing)await env.DB.prepare("UPDATE facebook_accounts SET name=?,encrypted_token=?,status='connected' WHERE id=?").bind(page.name,sealed,existing.id).run();
+   if(migrating){
+    // Same row keeps flows, jobs and sessions; the Zernio connection is released afterwards (best effort).
+    await env.DB.prepare("UPDATE facebook_accounts SET name=?,encrypted_token=?,provider='meta',remote_id=?,profile_id='meta',status='connected' WHERE id=?").bind(page.name,sealed,'meta:'+page.id,existing.id).run();
+    try{await zernioRequest(env,'accounts/'+encodeURIComponent(existing.remote_id),{method:'DELETE'});}catch(e){console.warn(JSON.stringify({event:'facebook_zernio_release_failed',workspace_id:workspace,error:e.message}));}
+   }else if(existing)await env.DB.prepare("UPDATE facebook_accounts SET name=?,encrypted_token=?,status='connected' WHERE id=?").bind(page.name,sealed,existing.id).run();
    else await env.DB.prepare("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at,provider,encrypted_token) VALUES(?,?,?,?,?,?,'connected',?,'meta',?)").bind(crypto.randomUUID(),workspace,'meta:'+page.id,'meta',page.id,page.name,nowSeconds(),sealed).run();
    await env.DB.prepare('DELETE FROM facebook_meta_pending WHERE user_id=? AND workspace_id=?').bind(user.id,workspace).run();
    return J({connected:true,page:{id:page.id,name:page.name}});

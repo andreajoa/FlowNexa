@@ -102,3 +102,13 @@ test('exchange rejection with real Meta code100 is classified without reaching p
  env.META_FETCH=(url,options)=>new URL(url).pathname==='/access_token'?Promise.resolve(Response.json({error:{message:'Unsupported request - method type: get',type:'IGApiException',code:100,fbtrace_id:'trace-fixture'}},{status:400})):fetcher(url,options);
  const result=await callback();assert.equal(result.status,502);assert.equal((await result.json()).error,'long_token_exchange_failed');assert.equal(logs[0].provider_code,100);assert.equal(logs[0].step,'long_token_exchange');assert.equal(logs[0].unsupported_get,true);assert.equal((await db.prepare('SELECT count(*) n FROM instagram_accounts').first()).n,0);
 });
+test('direct reconnect of a Zernio profile moves its flows and releases the Zernio connection',async t=>{
+ const{db,env,callback}=await setup(t);const released=[];
+ env.ZERNIO_API_KEY='z';env.ZERNIO_FETCH=async(input,options={})=>{released.push([options.method,new URL(input).pathname]);return Response.json({success:true});};
+ db.sqlite.exec("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,status) VALUES('old','workspace','gilberto.rebuild','zernio:6ad5111d645e2f0af3da8ed2','connected');INSERT INTO flows(id,workspace_id,account_id,name,trigger_type,scope,configuration,enabled) VALUES('f','workspace','old','Gilberto','comment_any','all','{}',1)");
+ const response=await callback();assert.equal(response.status,302,await response.clone().text());
+ const direct=db.sqlite.prepare("SELECT id FROM instagram_accounts WHERE ig_user_id='12345'").get();
+ assert.equal(db.sqlite.prepare("SELECT account_id FROM flows WHERE id='f'").get().account_id,direct.id);
+ assert.equal(db.sqlite.prepare("SELECT status FROM instagram_accounts WHERE id='old'").get().status,'disconnected');
+ assert.deepEqual(released,[['DELETE','/api/v1/accounts/6ad5111d645e2f0af3da8ed2']]);
+});

@@ -3,7 +3,7 @@ import {processFacebookJobs,metaFacebookWebhook} from './facebook-runtime.js';
 import {zernioConnection} from './zernio-connection.js';
 import {zernioWebhook} from './zernio-webhook.js';
 import {processConversations} from './conversation-runtime.js';
-import {billingApi,stripeWebhook} from './billing.js';
+import {billingApi,stripeWebhook,ownerExempt} from './billing.js';
 import {refreshAccounts,deauthorize} from './account-lifecycle.js';
 import {legalPage} from './legal.js';
 import {appPage} from './app-ui.js';
@@ -48,7 +48,8 @@ export default {async fetch(request,env,ctx={}){
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
  if(path==='/webhooks/zernio')return zernioWebhook(request,env);
  if(path==='/webhooks/facebook')return metaFacebookWebhook(request,env);
- if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio')return zernioConnection(request,env);
+ // The owner's own workspaces connect Instagram directly through Meta (free); customers follow the provider setting.
+ if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio'&&!await ownerExempt(env,url.searchParams.get('workspace')||''))return zernioConnection(request,env);
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);
  if(path.startsWith('/api/auth/')||path==='/api/workspaces'||path==='/api/accounts')return accountApi(request,env);

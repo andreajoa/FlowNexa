@@ -86,3 +86,16 @@ test('FACEBOOK_CONNECTION_PROVIDER=zernio sends new Pages through Zernio',async 
  f.env.ZERNIO_FETCH=async(input,options={})=>{const u=new URL(input);if(u.pathname==='/api/v1/profiles')return(options.method||'GET')==='GET'?Response.json({profiles:[]}):Response.json({profile:{_id:'d'.repeat(24),externalId:JSON.parse(options.body).externalId}});if(u.pathname==='/api/v1/accounts')return Response.json({accounts:[]});if(u.pathname==='/api/v1/connect/facebook')return Response.json({authUrl:'https://zernio.com/connect/x'});throw Error('unexpected '+u.pathname);};
  const r=await facebookApi(f.request('/api/facebook/connect?workspace=w'),f.env);assert.equal(r.status,200);assert.equal(new URL((await r.json()).authorization_url).hostname,'zernio.com');
 });
+test('owner Page on Zernio migrates in place to Meta: same account and flows, Zernio connection released',async t=>{
+ const f=await fixture(t);await ensureFacebookSchema(f.env);f.env.BILLING_EXEMPT_WORKSPACES='amb';f.env.FACEBOOK_CONNECTION_PROVIDER='zernio';
+ f.db.sqlite.exec("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at) VALUES('z','amb','abcdefabcdefabcdefabcdef','profile_z','111','AMB Boutique','connected',1);INSERT INTO facebook_flows(id,workspace_id,account_id,name,trigger_type,response_kind,response_text,enabled,created_at,updated_at) VALUES('jasmin','amb','z','Jasmin','dm_any','message','Hi',1,1,1)");
+ const released=[];f.env.ZERNIO_FETCH=async(input,options={})=>{released.push([options.method,new URL(input).pathname]);return Response.json({success:true});};
+ assert.equal((await facebookApi(f.request('/api/facebook/connect?workspace=amb'),f.env)).status,409);
+ const start=await facebookApi(f.request('/api/facebook/connect?workspace=amb&reconnect_id=z&migrate=1'),f.env);assert.equal(start.status,200);
+ const state=new URL((await start.json()).authorization_url).searchParams.get('state');
+ assert.equal((await facebookApi(f.request('/api/facebook/meta/callback?code=abc&state='+encodeURIComponent(state)),f.env)).status,302);
+ assert.equal((await facebookApi(f.request('/api/facebook/meta/select',{workspace_id:'amb',page_id:'111'}),f.env)).status,200);
+ const account=f.db.sqlite.prepare('SELECT * FROM facebook_accounts').get();assert.equal(account.id,'z');assert.equal(account.provider,'meta');assert.equal(account.remote_id,'meta:111');
+ assert.equal(f.db.sqlite.prepare("SELECT account_id FROM facebook_flows WHERE id='jasmin'").get().account_id,'z');
+ assert.deepEqual(released,[['DELETE','/api/v1/accounts/abcdefabcdefabcdefabcdef']]);
+});
