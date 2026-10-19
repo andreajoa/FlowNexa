@@ -11,7 +11,10 @@ export function metaRedirectUri(origin){return new URL('/api/facebook/meta/callb
 
 export function metaAuthorizationUrl(env,origin,state){
  const url=new URL('https://www.facebook.com/v23.0/dialog/oauth');
- url.search=new URLSearchParams({client_id:env.FACEBOOK_APP_ID,redirect_uri:metaRedirectUri(origin),state,response_type:'code',scope:META_PAGE_SCOPES.join(',')}).toString();
+ // Facebook Login for Business uses a saved configuration (config_id); classic Login uses scopes.
+ const params={client_id:env.FACEBOOK_APP_ID,redirect_uri:metaRedirectUri(origin),state,response_type:'code'};
+ if(env.FACEBOOK_LOGIN_CONFIG_ID)params.config_id=env.FACEBOOK_LOGIN_CONFIG_ID;else params.scope=META_PAGE_SCOPES.join(',');
+ url.search=new URLSearchParams(params).toString();
  return url.href;
 }
 

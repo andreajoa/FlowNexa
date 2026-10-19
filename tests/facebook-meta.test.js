@@ -74,3 +74,9 @@ test('own Meta app: credentials validated, Page subscribed, webhooks verified wi
  assert.equal((await metaFacebookWebhook(withSecret(secret),f.env)).status,401);
  assert.equal((await metaFacebookWebhook(withSecret(own),f.env)).status,200);
 });
+
+test('Facebook Login for Business uses the saved configuration instead of scopes',async()=>{
+ const {metaAuthorizationUrl}=await import('../src/facebook-meta.js');
+ const u=new URL(metaAuthorizationUrl({FACEBOOK_APP_ID:'1',FACEBOOK_LOGIN_CONFIG_ID:'987'},origin,'s'));
+ assert.equal(u.searchParams.get('config_id'),'987');assert.equal(u.searchParams.has('scope'),false);
+});
