@@ -2,7 +2,8 @@ import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
 const oid=id=>typeof id==='string'&&/^[a-f0-9]{24}$/i.test(id);
-const native=id=>typeof id==='string'&&/^\d{1,100}$/.test(id);
+// Business-portfolio Pages come back as '<userId>:page:<pageId>'; webhooks identify the Page by pageId.
+const pageNativeId=id=>typeof id==='string'?id.match(/^(?:\d{1,100}:page:)?(\d{1,100})$/)?.[1]||null:null;
 const profileId=p=>typeof p==='string'?p:p?._id;
 const safeAccount=a=>({id:a.id,name:a.name,native_id:a.native_id,status:a.status});
 const safeFlow=f=>({...f,keywords:JSON.parse(f.keywords)});
@@ -50,15 +51,15 @@ export async function facebookApi(request,env){
    const remoteId=url.searchParams.get('accountId');if(url.searchParams.get('connected')!=='facebook'||url.searchParams.get('profileId')!==row.profile_id||!oid(remoteId))throw fail('facebook_authorization_failed',400);
    const result=await zernioRequest(env,'accounts?'+new URLSearchParams({profileId:row.profile_id,platform:'facebook'}));
    const remote=result.accounts?.find(a=>a._id===remoteId&&profileId(a.profileId)===row.profile_id&&a.platform==='facebook');
-   const name=remote?.displayName||remote?.username;
-   if(!remote||remote.isActive!==true||remote.needsReconnection===true||remote.enabled===false||!native(remote.platformUserId)||typeof name!=='string'||!name.trim()||name.length>200)throw fail('facebook_authorization_failed',409);
-   const matches=(await env.DB.prepare('SELECT * FROM facebook_accounts WHERE remote_id=? OR native_id=?').bind(remoteId,remote.platformUserId).all()).results;
-   if(matches.some(a=>a.workspace_id!==row.workspace_id||a.profile_id!==row.profile_id||a.remote_id!==remoteId||a.native_id!==remote.platformUserId))throw fail('facebook_page_already_connected',409);
+   const name=remote?.displayName||remote?.username,nativeId=pageNativeId(remote?.platformUserId);
+   if(!remote||remote.isActive!==true||remote.needsReconnection===true||remote.enabled===false||!nativeId||typeof name!=='string'||!name.trim()||name.length>200)throw fail('facebook_authorization_failed',409);
+   const matches=(await env.DB.prepare('SELECT * FROM facebook_accounts WHERE remote_id=? OR native_id=?').bind(remoteId,nativeId).all()).results;
+   if(matches.some(a=>a.workspace_id!==row.workspace_id||a.profile_id!==row.profile_id||a.remote_id!==remoteId||a.native_id!==nativeId))throw fail('facebook_page_already_connected',409);
    if(row.reconnect_id&&!matches.some(a=>a.id===row.reconnect_id))throw fail('facebook_page_identity_changed',409);
    const id=matches[0]?.id||crypto.randomUUID();
    // A pilot has one Page per workspace. Reconnect cannot replace it or republish flows.
    const different=await env.DB.prepare("SELECT id FROM facebook_accounts WHERE workspace_id=? AND id<>? LIMIT 1").bind(row.workspace_id,id).first();if(different)throw fail('facebook_pilot_page_limit',409);
-   await env.DB.prepare("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at) VALUES(?,?,?,?,?,?,'connected',?) ON CONFLICT(remote_id) DO UPDATE SET name=excluded.name,status='connected' WHERE facebook_accounts.workspace_id=excluded.workspace_id AND facebook_accounts.native_id=excluded.native_id").bind(id,row.workspace_id,remoteId,row.profile_id,remote.platformUserId,name,nowSeconds()).run();
+   await env.DB.prepare("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at) VALUES(?,?,?,?,?,?,'connected',?) ON CONFLICT(remote_id) DO UPDATE SET name=excluded.name,status='connected' WHERE facebook_accounts.workspace_id=excluded.workspace_id AND facebook_accounts.native_id=excluded.native_id").bind(id,row.workspace_id,remoteId,row.profile_id,nativeId,name,nowSeconds()).run();
    return new Response(null,{status:302,headers:{location:new URL('/app?facebook_connected=1&workspace='+encodeURIComponent(row.workspace_id)+'#facebook',url.origin).href,'cache-control':'no-store','referrer-policy':'no-referrer'}});
   }
   const body=request.method==='GET'?{}:await payload(request);
@@ -85,6 +86,10 @@ export async function facebookApi(request,env){
    const redirect=new URL('/api/facebook/callback',url.origin);redirect.searchParams.set('fn_state',state);
    // Pages owned by a Meta business portfolio are only listed with business_management, which
    // the provider grants under its ads area; offered as an explicit retry after no_pages_granted.
+   // A Page already authorized for this profile (e.g. callback failed after Meta consent) is linked through the
+   // same validated callback instead of a new OAuth, which the provider would bill as another account.
+   const adopt=!reconnect&&(await zernioRequest(env,'accounts?'+new URLSearchParams({profileId:profile,platform:'facebook'}))).accounts?.find(a=>a.platform==='facebook'&&a.isActive===true&&profileId(a.profileId)===profile&&oid(a._id));
+   if(adopt){redirect.searchParams.set('connected','facebook');redirect.searchParams.set('profileId',profile);redirect.searchParams.set('accountId',adopt._id);return J({authorization_url:redirect.href});}
    const result=await zernioRequest(env,'connect/facebook?'+new URLSearchParams({profileId:profile,redirect_url:redirect.href,scopes:url.searchParams.get('business')==='1'?'comments,messaging,ads':'comments,messaging'}));
    let auth;try{auth=new URL(result.authUrl);}catch{throw fail('facebook_provider_response',502);}
    if(auth.protocol!=='https:'||auth.username||auth.password||!['zernio.com','www.zernio.com','facebook.com','www.facebook.com'].includes(auth.hostname))throw fail('facebook_provider_response',502);

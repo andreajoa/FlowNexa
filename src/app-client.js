@@ -96,7 +96,7 @@ function boot(templates, prepareTemplate, conversationTemplate, previewConversat
     zernio_connection_failed:'Não foi possível iniciar ou concluir a conexão do Instagram. Tente novamente.',
     zernio_authorization_failed:'A conexão não foi autorizada. Tente novamente e permita acesso a comentários e mensagens.',
     instagram_account_already_connected:'Esta conta já está conectada. Use a conexão existente ou desconecte-a antes de mudar a integração.',
-    zernio_request_rejected:'O serviço de Instagram recusou a solicitação. Confira a conexão da conta.',
+    zernio_request_rejected:'O serviço de conexão recusou a solicitação. Confira a conexão da conta ou fale com o suporte.',
     zernio_unavailable:'O serviço de Instagram está temporariamente indisponível. Tente novamente.',
     long_token_exchange_failed:'A Meta não emitiu uma autorização duradoura. Tente uma nova conexão; se persistir, o suporte precisa conferir as credenciais do aplicativo Instagram.',
     instagram_permissions_missing:'Autorize o acesso ao perfil, às mensagens e aos comentários para conectar esta conta.',
