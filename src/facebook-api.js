@@ -83,7 +83,9 @@ export async function facebookApi(request,env){
    const state=crypto.randomUUID()+crypto.randomUUID(),hash=await sha(state+':'+cookieToken(request));
    await env.DB.prepare('INSERT INTO facebook_oauth_states(state_hash,user_id,workspace_id,profile_id,reconnect_id,expires_at) VALUES(?,?,?,?,?,?)').bind(hash,user.id,workspace,profile,reconnect||null,nowSeconds()+600).run();
    const redirect=new URL('/api/facebook/callback',url.origin);redirect.searchParams.set('fn_state',state);
-   const result=await zernioRequest(env,'connect/facebook?'+new URLSearchParams({profileId:profile,redirect_url:redirect.href,scopes:'comments,messaging'}));
+   // Pages owned by a Meta business portfolio are only listed with business_management, which
+   // the provider grants under its ads area; offered as an explicit retry after no_pages_granted.
+   const result=await zernioRequest(env,'connect/facebook?'+new URLSearchParams({profileId:profile,redirect_url:redirect.href,scopes:url.searchParams.get('business')==='1'?'comments,messaging,ads':'comments,messaging'}));
    let auth;try{auth=new URL(result.authUrl);}catch{throw fail('facebook_provider_response',502);}
    if(auth.protocol!=='https:'||auth.username||auth.password||!['zernio.com','www.zernio.com','facebook.com','www.facebook.com'].includes(auth.hostname))throw fail('facebook_provider_response',502);
    return J({authorization_url:auth.href});
