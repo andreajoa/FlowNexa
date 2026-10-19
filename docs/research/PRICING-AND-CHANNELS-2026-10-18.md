@@ -33,7 +33,7 @@ O anual é pago integralmente e renova anualmente. Por solicitação do propriet
 
 Repositório: [andreajoa/SaaS-whatsapp](https://github.com/andreajoa/SaaS-whatsapp), `origin/main` d009daa6f29ea6c97fbbf479a1ace75c53a9e652 lido nesta investigação. Foram examinados o cliente Stripe, checkout, portal, sincronização, tabela de planos e mercados. O Atenza usa checkout embutido, preço resolvido no servidor por mercado/período, metadados da organização, idempotência e sincronização de assinatura. O cartão é preenchido na Stripe. Não foram copiados segredos nem alterados seus produtos, código, assinaturas ou portal padrão.
 
-O FlowNexa conserva sua implementação existente e a amplia: oito Prices permitidos no servidor, checkout com idioma, troca segura de checkout não pago, webhook assinado e deduplicado, assinatura consultada diretamente na Stripe, portal exclusivo do aplicativo e limites. A credencial foi preparada na conta CoreUnit que contém os três produtos Atenza; a criação está bloqueada pela verificação de titular exigida pela Stripe. Nenhuma cobrança real foi criada.
+O FlowNexa conserva sua implementação existente e a amplia: oito Prices permitidos no servidor, checkout com idioma, troca segura de checkout não pago, webhook assinado e deduplicado, assinatura consultada diretamente na Stripe, portal exclusivo do aplicativo e limites. A credencial foi preparada na conta CoreUnit que contém os três produtos Atenza; a verificação de titular foi concluída e os recursos exclusivos foram provisionados. Nenhuma cobrança real foi criada.
 
 ## Canais: recursos reais e implementação necessária
 
@@ -59,6 +59,6 @@ Para implementar de verdade:
 
 Passaram 180 testes Node e navegador com português/inglês, troca manual, anual integral, preservação do plano escolhido, checkout embutido com provedor simulado e renderização móvel. Os testes de provisionamento garantem separação do catálogo Atenza e nenhum endpoint de cobrança direta. Não houve pagamento real de teste.
 
-Para ativar produção faltam a verificação da Stripe, a criação da credencial restrita, os dois produtos/oito Prices e o webhook/portal exclusivos do FlowNexa, configurar Vercel e publicar o deployment com essas variáveis. O script de provisionamento mantém o segredo do webhook no servidor e não o imprime. Não se deve inventar IDs nem reutilizar/rotacionar o webhook de outro aplicativo.
+Produção ativada após verificação do titular: credencial restrita, dois produtos/oito Prices e webhook/portal exclusivos do FlowNexa configurados na Vercel; release publicado. Checkout real criado, montado e expirado sem pagamento. A confirmação financeira por webhook aguarda uma transação real. O script de provisionamento mantém o segredo do webhook no servidor e não o imprime. Não se deve inventar IDs nem reutilizar/rotacionar o webhook de outro aplicativo.
 
 O corte `BILLING_LEGACY_BEFORE` preserva os espaços criados antes do lançamento. Com `BILLING_ENFORCED=true`, novos espaços precisam de assinatura ativa para conectar canais, publicar e executar automações. O portal permite gerenciar pagamento e cancelamento no fim do período; upgrade e troca de ciclo podem gerar pró-rata informada pela Stripe. A ativação deve ocorrer com credenciais e webhook verificados, sem interromper os fluxos já publicados do Gilberto.

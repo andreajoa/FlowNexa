@@ -1,60 +1,45 @@
-# Retomada: Stripe e planos localizados do FlowNexa
+# Concluído: Stripe e planos localizados do FlowNexa
 
-Atualizado em 18/10/2026. Branch `feat/stripe-localized-subscriptions`, baseada em `9e111b6`, no worktree `/Users/andrealmeida/flownexa-instagram-audit`.
+Stripe ativada em produção em 18/10/2026 (horário de São Paulo). O titular concluiu a verificação exigida pela Stripe. O provisionamento e a publicação foram concluídos sem cobrança de teste e sem alterar produtos ou configurações do Atenza.
 
-## Concluído
+## Produção atual
 
-- Atenza investigado sem alterar código, produtos, assinaturas ou portal. Não abrir/copiar seus arquivos `.env`.
-- Pesquisa oficial registrada em `docs/research/PRICING-AND-CHANNELS-2026-10-18.md`.
-- Catálogo com oito preços: Pro R$59,90/mês ou R$599/ano; US$9,90/mês ou US$129/ano. Equipes R$119,90/mês ou R$1.199/ano; US$24,90/mês ou US$249/ano.
-- Português seleciona BRL; inglês e demais idiomas selecionam USD. Troca manual persistida. Anual cobrado integralmente, com equivalente mensal informativo.
-- Checkout embutido, validação de valor/moeda/recorrência no servidor, troca segura de checkout não pago, idioma e configuração exclusiva do portal.
-- Limites Pro: uma conta e 10.000 envios/mês calendário UTC; Equipes: duas contas e 20.000. Sem cobrança automática de excedentes.
-- `BILLING_LEGACY_BEFORE` preserva espaços existentes; ativar cobrança apenas com configuração real verificada.
-- 180 testes Node passaram. Navegador passou em português/inglês, troca manual de moeda, anual integral, checkout simulado e celular. Regressão do Gilberto passou: 29 nós, edição, preview, publicação e celular. Nenhuma mensagem real nem cobrança de teste foi enviada. Não repetir testes sem nova alteração.
+- Site: https://flownex.online
+- Deployment: `dpl_Euw1dSJEGfV12YD8mqtub51Hy6Hf`
+- Release: https://flownexa-fo9lyb9ua-flownexa3.vercel.app
+- Código: `aed9016`, branch `feat/stripe-localized-subscriptions`, PR https://github.com/andreajoa/FlowNexa/pull/16
+- Vercel: projeto `flownexa`, equipe `flownexa3`.
+- Conta Stripe CoreUnit confirmada pelos três produtos Atenza existentes. Catálogo FlowNexa separado: dois produtos, oito preços; portal exclusivo; webhook https://flownex.online/webhooks/stripe.
+- Segredos configurados como variáveis sensíveis na Vercel. Não imprimir, copiar para o repositório ou reutilizar os segredos do Atenza.
+- `BILLING_ENFORCED=true`; corte `BILLING_LEGACY_BEFORE=2026-10-19T00:11:58Z`. Espaços anteriores preservados; novos espaços exigem assinatura para os recursos protegidos.
 
-## Bloqueio: verificação do titular na Stripe
+## Preços aprovados
 
-Conta correta: CoreUnit `acct_1OOu0JG3HxcyUpFW`, confirmada pelos produtos Atenza Essencial, Pro e Ilimitado.
+Pro: R$59,90/mês ou R$599/ano; US$9,90/mês ou US$129/ano. Uma conta Instagram e 10.000 envios/mês calendário UTC.
 
-A credencial restrita “FlowNexa subscriptions live” foi preparada, mas a Stripe exigiu “Verification required” e um link por e-mail aberto pelo titular no mesmo navegador/dispositivo. O proprietário foi avisado. Não enviar verificação por ele, abrir e-mail, coletar OTP ou tentar contornar essa etapa. Na última conferência a tela de criação estava aberta, sem chave nova visível; a ausência do modal não comprova conclusão da verificação.
+Equipes: R$119,90/mês ou R$1.199/ano; US$24,90/mês ou US$249/ano. Duas contas Instagram e 20.000 envios/mês calendário UTC.
 
-Não foram criados produtos/preços/webhook/portal do FlowNexa na Stripe. Pagamentos reais ainda não estão ativos. A produção e os fluxos existentes devem continuar funcionando.
+O proprietário pediu preservar o anual Pro USD em US$129, embora doze mensalidades de US$9,90 somem US$118,80. Não anunciar desconto nesse caso. Anuais cobrados integralmente. Sem cobrança automática de excedentes. Idioma português seleciona BRL, inglês/demais idiomas USD; troca manual permitida.
 
-## Próxima ação após o titular concluir
+## Evidências
 
-1. Confirmar a verificação na aba Stripe do Chrome; criar apenas a chave restrita preparada. Permissões: escrita Customers, Products, Prices, Subscriptions, Customer Portal, Checkout Sessions e Webhook Endpoints; leitura Payment Methods e Invoices. Nenhuma permissão de saques, transferências ou reembolsos.
-2. `scripts/provision-stripe-catalog.mjs` cria somente dois produtos/oito preços, portal e webhook exclusivos do FlowNexa, com idempotência e validação do catálogo. Não altera o Atenza.
-3. Ponte temporária `/tmp/flownexa-stripe-provision-live.mjs` captura a chave nova diretamente do navegador em memória e persiste segredos como variáveis sensíveis da Vercel. Não imprimir segredos ou gravá-los em arquivos. Exige a chave completa visível; falha antes de mutações se não conseguir capturá-la.
-4. Helper Vercel `/tmp/flownexa-vercel-session.py`, sessão 62008, mantém token autorizado em memória. Confirmar se ainda está ativo antes de reutilizar. Progresso sem segredos: `/tmp/flownexa-stripe-provision-progress.json`. Se houver falha parcial, inspecionar antes de repetir; preservar o segredo de webhook já criado.
-5. Publicar release com as variáveis reais, verificar saúde, catálogo, checkout sem cobrar cartão e webhook. Só então promover para `flownex.online`. Não contratar plano pago nem cobrar cartão para teste.
+- 180 testes Node passaram na implementação; após a mudança de preço passaram 27 testes focados e navegador pt-BR/en-US, incluindo moeda, anual integral, checkout simulado e celular.
+- Regressão dos fluxos do Gilberto passou sem envios reais.
+- Stripe real: oito preços, portal e webhook conferidos. Checkout Pro USD de 990 centavos criado e expirado sem cartão ou cobrança.
+- Release verificado antes da promoção: saúde OK, preços e JavaScript corretos, domínio público preservado até a promoção.
+- Webhook rejeitou POST sem assinatura com HTTP 400 `invalid_signature`.
+- Release promovido para o domínio público. Saúde pública OK; API autenticada `/api/billing/status` retornou configurado, oito planos, Pro USD 990 e `legacy_access=true` para o espaço Gilberto.
+- Formulário real montado dentro do aplicativo, iframe Stripe “Embedded checkout”, sem alertas. Sua sessão foi conferida na API Stripe, vinculada ao espaço correto, total USD 990, e expirada sem pagamento. Nenhuma assinatura paga foi criada para teste.
+- A confirmação de um pagamento e a entrega do evento financeiro correspondente dependem da primeira transação real; não foram simuladas como pagamento efetivo.
 
-## Preservação e ferramentas
+## Pesquisa de canais concluída
 
-Produção anterior: `dpl_ykby3Mwo4rsYEC28msSEVaBxbVVm`, código `adb8ed9`, URL `https://flownexa-dw66okd87-flownexa3.vercel.app`. Projeto `flownexa`, equipe `flownexa3`. PR anterior #15 contém os fluxos do Gilberto; não sobrescrever nem mesclar automaticamente.
+Relatórios: `docs/research/PRICING-AND-CHANNELS-2026-10-18.md` e `docs/research/MULTICHANNEL-IMPLEMENTATION-2026-10-18.md`.
 
-Chrome Stripe: prefixo `https://dashboard.stripe.com/acct_1OOu0JG3HxcyUpFW/apikeys/create`; helper `/tmp/flownexa-tab.py` via `python3`. Consultar apenas seletores/booleanos, nunca retornar segredos. Playwright `channel: chrome` interfere na resolução do Chrome do proprietário: usar o Headless Shell separado em `/tmp/flownexa-playwright-browsers`.
+Facebook → TikTok → YouTube. A pesquisa documenta OAuth, escopos, endpoints, eventos, capacidades, limites, armazenamento separado, migração aditiva e flags desligadas. Nenhum canal novo foi conectado ou anunciado como disponível. O próximo trabalho, se solicitado, é implementar os contratos/fixtures e armazenamento isolado; preservar tabelas, IDs e fluxos Instagram existentes.
 
-Facebook, TikTok e YouTube foram pesquisados, mas ainda não implementados. Facebook: Páginas/Messenger; TikTok: contas Business elegíveis e capacidades diferentes; YouTube: comentários públicos, sem DM na API usada. Não anunciá-los como canais ativos.
+Não contratar plano pago, cobrar cartão ou conectar contas sem consentimento do titular. Atenza deve permanecer intacto. Não repetir o provisionamento: preservar webhook e credenciais existentes.
 
-O monitor de retomada só deve encerrar quando o objetivo estiver concluído ou o proprietário cancelar: criar `/Users/andrealmeida/.local/share/flownexa-codex-resume/complete`. Não criar enquanto a ativação Stripe estiver pendente.
+## Monitor
 
-## Revisão salva nesta retomada
-
-- Implementação commitada em `b1096d6`, enviada para `origin/feat/stripe-localized-subscriptions`.
-- PR de rascunho #16: https://github.com/andreajoa/FlowNexa/pull/16, com base na branch da PR #15 para separar o trabalho de cobrança.
-- Release preparado sem promover o domínio público: `dpl_98WdFujgowmaL62TaStRaEX2cMRp`, https://flownexa-1jje9c8j9-flownexa3.vercel.app. Build READY. Usa as variáveis atuais, sem pagamentos reais configurados. A prévia exige autenticação Vercel.
-- Não há `/tmp/flownexa-stripe-provision-progress.json`: o provisionamento real ainda não foi executado. Aguardar a verificação do titular, conforme instrução expressa do proprietário.
-- Verificação remota do release passou: `/api/health` OK, preços localizados presentes, JavaScript da landing e do aplicativo válido, capacidades dos fluxos presentes. `https://flownex.online` continua servindo a versão anterior; o domínio público não foi promovido. Zero cobranças reais.
-
-## Ajuste autorizado pelo proprietário
-
-Pro USD mensal reduzido para US$9,90; anual mantido em US$129 e demais preços preservados. Removida promessa genérica de dois meses de economia: o Pro USD anual agora supera doze mensalidades. Pesquisa aprofundada dos canais autorizada, preservando o Instagram.
-
-## Validação do preço US$9,90
-
-Commit `0fab92d` enviado à PR #16. Passaram 27 testes focados de catálogo, cobrança e provisionamento, mais navegador pt-BR/en-US incluindo o novo preço mensal, anual preservado, troca manual, checkout simulado e celular. Zero cobranças reais. Nova prévia protegida READY: `https://flownexa-qtq2a0op2-flownexa3.vercel.app`, deployment `dpl_CPJ8BTpNQ9VfRLwpaQnBuQwzGFwq`. Não promovida para o domínio público. Bloqueio de verificação do titular na Stripe permanece.
-
-Verificação remota da nova prévia passou: saúde OK, catálogo contém Pro USD mensal 990 centavos e anual 12900, JavaScript válido e domínio público preservado.
-
-Pesquisa aprofundada concluída em `docs/research/MULTICHANNEL-IMPLEMENTATION-2026-10-18.md`: OAuth/escopos, endpoints, eventos, limites de conta/janelas/mídia, capacidades, migração aditiva e flags desligadas. Ordem Facebook → TikTok → YouTube. Nenhuma implementação multicanal ou conexão foi feita. Próxima mudança técnica proposta: contratos/fixtures e armazenamento separado com todos os canais novos desligados; não alterar tabelas/IDs Instagram. TikTok tem orçamento de dez respostas/48h; YouTube um canal por perfil Zernio; proibir substituição silenciosa de contas em reconexão.
+Objetivo desta etapa concluído: criar `/Users/andrealmeida/.local/share/flownexa-codex-resume/complete` para encerrar a retomada automática. A expansão multicanal descrita acima é projeto técnico de pesquisa, não uma integração ativa.
