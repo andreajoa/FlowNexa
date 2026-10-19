@@ -1,0 +1,25 @@
+import {billingAccess} from './billing.js';
+export const FACEBOOK_SCHEMA=[
+ "-- Additive Facebook pilot storage. No Instagram table or identity is changed.\nCREATE TABLE IF NOT EXISTS facebook_profiles(workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,profile_id TEXT NOT NULL UNIQUE)",
+ "CREATE TABLE IF NOT EXISTS facebook_oauth_states(state_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace_id TEXT NOT NULL,profile_id TEXT NOT NULL,reconnect_id TEXT,expires_at INTEGER NOT NULL)",
+ "CREATE TABLE IF NOT EXISTS facebook_accounts(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,remote_id TEXT NOT NULL UNIQUE,profile_id TEXT NOT NULL,native_id TEXT NOT NULL UNIQUE,name TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'connected',created_at INTEGER NOT NULL)",
+ "CREATE INDEX IF NOT EXISTS idx_facebook_accounts_workspace ON facebook_accounts(workspace_id)",
+ "CREATE TABLE IF NOT EXISTS facebook_flows(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,name TEXT NOT NULL,trigger_type TEXT NOT NULL,keywords TEXT NOT NULL DEFAULT '[]',response_kind TEXT NOT NULL,response_text TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1,published_at INTEGER,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)",
+ "CREATE INDEX IF NOT EXISTS idx_facebook_flows_account ON facebook_flows(account_id,enabled)",
+ "CREATE TABLE IF NOT EXISTS facebook_events(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,encrypted_event TEXT NOT NULL,event_at INTEGER NOT NULL,received_at INTEGER NOT NULL)",
+ "CREATE TABLE IF NOT EXISTS facebook_jobs(id TEXT PRIMARY KEY,event_id TEXT NOT NULL UNIQUE REFERENCES facebook_events(id) ON DELETE CASCADE,workspace_id TEXT NOT NULL,account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,flow_id TEXT NOT NULL REFERENCES facebook_flows(id) ON DELETE CASCADE,flow_version INTEGER NOT NULL,encrypted_action TEXT NOT NULL,recipient_hash TEXT,conversation_hash TEXT,status TEXT NOT NULL DEFAULT 'pending',due_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,lease_id TEXT,lease_until INTEGER,attempt_at INTEGER,completed_at INTEGER,provider_id TEXT,error TEXT)",
+ "CREATE INDEX IF NOT EXISTS idx_facebook_jobs_due ON facebook_jobs(status,due_at)",
+ "CREATE TABLE IF NOT EXISTS facebook_contacts(account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,recipient_hash TEXT NOT NULL,opted_out INTEGER NOT NULL DEFAULT 0,last_incoming_at INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account_id,recipient_hash))",
+ "CREATE TABLE IF NOT EXISTS facebook_effects(effect_key TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE,status TEXT NOT NULL DEFAULT 'reserved')",
+ "CREATE INDEX IF NOT EXISTS idx_facebook_jobs_recipient ON facebook_jobs(account_id,recipient_hash,status)",
+ "CREATE INDEX IF NOT EXISTS idx_facebook_jobs_conversation ON facebook_jobs(account_id,conversation_hash,status)",
+ "CREATE UNIQUE INDEX IF NOT EXISTS idx_facebook_one_page_workspace ON facebook_accounts(workspace_id)",
+ "CREATE TABLE IF NOT EXISTS facebook_threads(account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,conversation_hash TEXT NOT NULL,standby INTEGER NOT NULL DEFAULT 0,last_control_at INTEGER NOT NULL,PRIMARY KEY(account_id,conversation_hash))"
+];
+export function facebookEnabled(env,workspace){return env.FACEBOOK_CHANNEL_ENABLED==='true'&&typeof workspace==='string'&&(env.FACEBOOK_PILOT_WORKSPACES||'').split(',').map(s=>s.trim()).filter(Boolean).includes(workspace);}
+export function facebookSendsEnabled(env,workspace){return facebookEnabled(env,workspace)&&env.FACEBOOK_SENDS_ENABLED==='true';}
+export function facebookMonthlyLimit(env){const n=Number(env.FACEBOOK_MONTHLY_MESSAGE_LIMIT||1000);return Number.isSafeInteger(n)&&n>0&&n<=10000?n:1000;}
+const ready=new WeakSet();
+export async function ensureFacebookSchema(env){if(!env.DB)throw Error('database_unavailable');if(ready.has(env.DB))return;try{await env.DB.prepare('SELECT 1 FROM facebook_effects LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_threads LIMIT 1').first();}catch{for(const sql of FACEBOOK_SCHEMA)await env.DB.prepare(sql).run();}ready.add(env.DB);}
+
+export async function facebookAccess(env,workspace){return facebookEnabled(env,workspace)&&await billingAccess(env,workspace);}

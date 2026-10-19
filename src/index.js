@@ -1,3 +1,5 @@
+import {facebookApi} from './facebook-api.js';
+import {processFacebookJobs} from './facebook-runtime.js';
 import {zernioConnection} from './zernio-connection.js';
 import {zernioWebhook} from './zernio-webhook.js';
 import {processConversations} from './conversation-runtime.js';
@@ -39,9 +41,10 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
-  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);return json({...queue,accounts});
+  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Date.now()+8000);}catch{facebook={error:'facebook_queue_unavailable'};}return json({...queue,accounts,facebook});
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
+ if(path.startsWith('/api/facebook/'))return facebookApi(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
  if(path==='/webhooks/zernio')return zernioWebhook(request,env);
  if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio')return zernioConnection(request,env);
