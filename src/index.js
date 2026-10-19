@@ -1,7 +1,9 @@
+import {facebookApi} from './facebook-api.js';
+import {processFacebookJobs,metaFacebookWebhook} from './facebook-runtime.js';
 import {zernioConnection} from './zernio-connection.js';
 import {zernioWebhook} from './zernio-webhook.js';
 import {processConversations} from './conversation-runtime.js';
-import {billingApi,stripeWebhook} from './billing.js';
+import {billingApi,stripeWebhook,ownerExempt} from './billing.js';
 import {refreshAccounts,deauthorize} from './account-lifecycle.js';
 import {legalPage} from './legal.js';
 import {appPage} from './app-ui.js';
@@ -13,6 +15,7 @@ import {enqueueWebhook,processPending} from './automation-engine.js';
 import {respond as json,sha} from './identity.js';
 import {messagingReady} from './meta-client.js';
 import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
+import {mcpHttp} from './mcp-http.js';
 export const TEMPLATES=[{id:'comment-link',name:'Comentou QUERO',trigger_type:'comment_keyword',scope:'selected',configuration:{keywords:['QUERO'],actions:[{type:'private_reply',text:'Aqui está o link solicitado.'}]}}];
 export function keywordMatch(content,words){const text=String(content||'').normalize('NFKC').toLocaleUpperCase('pt-BR');return Array.isArray(words)&&words.some(w=>String(w).trim()&&text.includes(String(w).normalize('NFKC').toLocaleUpperCase('pt-BR')))}
 export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==='selected'&&Array.isArray(selected)&&selected.includes(mediaId)}
@@ -26,8 +29,9 @@ async function processQueue(env){
  return{...queue,conversations};
 }
 
-export default {async fetch(request,env,ctx={}){
+const app={async fetch(request,env,ctx={}){
  const url=new URL(request.url),path=url.pathname;
+ if(path==='/mcp')return mcpHttp(request,env,(req,e)=>app.fetch(req,e));
  const legal=legalPage(path);if(legal&&request.method==='GET')return new Response(legal,{headers:{'content-type':'text/html; charset=utf-8','x-content-type-options':'nosniff'}});
  if(request.method==='GET'&&['/app','/app/','/app.js'].includes(path)){
   const script=path==='/app.js';return new Response(script?appClient():appPage(),{headers:{'content-type':script?'application/javascript; charset=utf-8':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; connect-src 'self' https://api.stripe.com https://r.stripe.com https://m.stripe.network https://checkout.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}});
@@ -39,12 +43,15 @@ export default {async fetch(request,env,ctx={}){
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
-  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);return json({...queue,accounts});
+  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Date.now()+8000);}catch{facebook={error:'facebook_queue_unavailable'};}return json({...queue,accounts,facebook});
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
+ if(path.startsWith('/api/facebook/'))return facebookApi(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
  if(path==='/webhooks/zernio')return zernioWebhook(request,env);
- if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio')return zernioConnection(request,env);
+ if(path==='/webhooks/facebook')return metaFacebookWebhook(request,env);
+ // The owner's own workspaces connect Instagram directly through Meta (free); customers follow the provider setting.
+ if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio'&&!await ownerExempt(env,url.searchParams.get('workspace')||''))return zernioConnection(request,env);
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);
  if(path.startsWith('/api/auth/')||path==='/api/workspaces'||path==='/api/accounts')return accountApi(request,env);
@@ -66,3 +73,4 @@ export default {async fetch(request,env,ctx={}){
  }
  return json({error:'not_found'},404);
 }};
+export default app;

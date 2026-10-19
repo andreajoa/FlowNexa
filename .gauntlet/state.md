@@ -21,3 +21,9 @@ Usuário confirmou recebimento do Direct real. Produção atual mantém cinco au
 Demanda: editor simples não oferece IF, múltiplas escolhas, mídia ou botões. Nova paleta visual e atalho do editor simples, sete modelos incluindo funil com menu e mídia. Runtime implementa imagem/vídeo/cartão com botões/respostas rápidas/switch, preservando resposta imutável e segurança de janela/pausa/idempotência. Primeira resposta privada permanece texto. Vídeo+link são envios separados; abrir URL não é resposta.
 Validação local106/106testes; revisão independente53/53testes e nenhum bloqueador/major;21caminhosChromium de regressão +3caminhos ricos com runtime/banco reais e Meta simulada. Browser criou funil, editou botões/links/IF, publicou e processou postbacks assinados para vídeo e imagem, recusando duplicata. Sem envio real de novos formatos nestes testes.
 Rollout: POSTreal de subscribed_apps na conta @atenzaon retornou200success=true; GETconfirmou comments,messages,messaging_postbacks. Campo global messaging_postbacks antes não assinado foi habilitado pelo painel oficial e leu Assinado/checkedtrue; confirmação após recarregar pendente. Nenhum fluxo de usuário alterado/publicado por esta revisão. Deploy pendente.
+
+## Facebook Pages pilot (2026-10-18)
+
+BUILD in progress. Baseline: prior180tests and Stripe27focused/browser passed. New full baseline running. Facebook not yet deployed. No Page consent given.
+
+Facebook final verification: baseline180pass; independent full217pass before last concurrency fixes; final focused41pass; independent actual-runtime Facebook browser owner/viewer/mobile/pass; Gilberto browser regression29nodes/pass. Two MAJOR races fixed and independently reproduced as passing. Zero unresolved BLOCKER/MAJOR in critic report. Real Page OAuth/interaction still pending owner AMB workspace session. User clarified same company workspace, per-channel navigation; no new workspace/account created.

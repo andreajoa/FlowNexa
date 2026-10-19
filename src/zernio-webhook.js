@@ -1,3 +1,4 @@
+import {acceptFacebookWebhook} from './facebook-runtime.js';
 import {respond as J} from './identity.js';
 import {enqueueEvents} from './automation-engine.js';
 import {zernioRequest,accountUsable} from './zernio-client.js';
@@ -45,6 +46,7 @@ export async function zernioWebhook(request,env){
  }catch(error){return J({error:error.message==='payload_too_large'?'payload_too_large':'invalid_payload'},error.message==='payload_too_large'?413:400);}
  // Vendor samples must never send messages or mutate a real account.
  if(body.test===true||body.event==='webhook.test')return J({received:true,queued:0});
+ if(body.account?.platform==='facebook')return acceptFacebookWebhook(body,env);
  if(!['comment.received','message.received','account.disconnected'].includes(body.event)||body.account?.platform!=='instagram')return J({received:true,queued:0});
  if(!env.DB||!env.TOKEN_ENCRYPTION_KEY)return J({error:'database_unavailable'},503);
  const remoteId=body.account?.accountId||body.account?.id;

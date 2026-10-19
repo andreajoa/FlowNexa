@@ -32,3 +32,9 @@ Initial diagnosis: real public root works; backend configuration path returns503
 - Revisor reproduziu respostas antigas avançando perguntas futuras; watermark causal, resposta imutável e recuperação de cursor corrigidos,90/90testes aprovados.
 
 - Correção HMAC confirmada em produção: comentário real persistido, execução concluída e mensagem aceita pela Meta com ID; segundo evento ficou unmatched. Confirmação de chegada no destinatário ainda pendente.
+
+## Facebook Pages pilot (2026-10-18)
+
+2026-10-18: Start isolated Facebook Pages pilot, branch feat/facebook-pages-isolated. Reuse authenticated server transport and encryption only; preserve Instagram parser, IDs and FKs. Independent runtime/frontend builders and final critic after implementation.
+
+Facebook independent critic reproduced standby/429 retry and stale-worker accepted-overwrite races. Corrected persisted thread ownership and lease-conditioned transitions, with regressions. New UI uses same workspace channel tabs, callbacks preserve membership-validated workspace. TikTok/YouTube disabled until implementation. AMB workspace ID located in existing tracked preset: b83bd3c3-0897-4bd1-8a50-2cc5933418fb; current browser only Gilberto login. Requested owner open existing AMB login, no permission bypass.

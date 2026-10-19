@@ -1,4 +1,4 @@
-import {commercialPlans} from './commercial-plans.js';
+import {commercialPlans,PLAN_TIERS} from './commercial-plans.js';
 import {getSessionUser,requireMembership,sameOrigin,payload,respond,nowSeconds,sha} from './identity.js';
 const API_VERSION='2026-08-26.dahlia';
 const terminal=new Set(['canceled','incomplete_expired']);
@@ -43,8 +43,9 @@ export async function billingApi(request,env){
   const row=await env.DB.prepare('SELECT * FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
   if(url.pathname==='/api/billing/status'&&request.method==='GET'){
    const plans=cfg?await Promise.all(Object.entries(cfg.prices).map(async([id,priceId])=>{const p=await price(env,priceId);const definition=commercialPlans().find(plan=>plan.id===id);return{...(definition?{tier:definition.tier,accounts:definition.accounts,messages:definition.messages}:{}),id,name:definition?.name||p.nickname||(typeof p.product==='object'?p.product.name:null)||id,unit_amount:p.unit_amount,currency:p.currency,interval:p.recurring.interval,interval_count:p.recurring.interval_count};})):[];
-   const paidPlan=cfg&&row&&commercialPlans().find(plan=>cfg.prices[plan.id]===row.stripe_price_id);const usage=paidPlan&&['active','trialing'].includes(row.subscription_status)&&row.current_period_end>nowSeconds()?{...await messageUsage(env,workspace),limit:paidPlan.messages}:null;
-   return respond({configured:Boolean(cfg),can_manage:canManage,plans,subscription:subscription(row,cfg),...(usage?{usage}:{}),...(env.BILLING_ENFORCED==='true'?{legacy_access:await legacyBillingAccess(env,workspace)}:{})});
+   const currentPlan=await workspacePlan(env,workspace);const usage=currentPlan?{...await messageUsage(env,workspace),limit:currentPlan.messages}:null;
+   const owner=await ownerExempt(env,workspace),legacy=env.BILLING_ENFORCED==='true'?await legacyBillingAccess(env,workspace):null,trial=env.BILLING_ENFORCED==='true'&&!legacy&&!owner?await trialStatus(env,workspace):null;
+   return respond({configured:Boolean(cfg),can_manage:canManage,plans,subscription:subscription(row,cfg),...(usage?{usage}:{}),...(legacy!==null?{legacy_access:legacy}:{}),...(trial?{trial}:{}),...(owner?{owner_access:true}:{})});
   }
   if(request.method!=='POST'||!['/api/billing/checkout','/api/billing/portal'].includes(url.pathname))return respond({error:'not_found'},404);
   if(!canManage)return respond({error:'forbidden'},403);
@@ -148,18 +149,45 @@ export async function legacyBillingAccess(env,workspace){
  const timestamp=typeof row?.created_at==='string'?Date.parse(row.created_at.includes('T')?row.created_at:row.created_at.replace(' ','T')+'Z'):NaN;
  return Number.isFinite(timestamp)&&timestamp<cutoff;
 }
-export async function billingAccess(env,workspace){
- if(env.BILLING_ENFORCED!=='true')return true;
- if(await legacyBillingAccess(env,workspace))return true;
- const cfg=config(env);if(!cfg||!env.DB||!workspace)return false;
- try{const row=await env.DB.prepare('SELECT subscription_status,stripe_price_id,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();return Boolean(row&&['active','trialing'].includes(row.subscription_status)&&Object.values(cfg.prices).includes(row.stripe_price_id)&&row.current_period_end>nowSeconds());}catch{return false;}
+// The owner's own profiles: full access with no charge and no plan limits. Matched on an
+// Instagram username in the workspace, which only the account holder can establish via OAuth.
+const listEnv=value=>(value||'').split(',').map(v=>v.trim().replace(/^@/,'').toLowerCase()).filter(Boolean);
+export async function ownerExempt(env,workspace){
+ if(!workspace)return false;if(listEnv(env.BILLING_EXEMPT_WORKSPACES).includes(workspace.toLowerCase()))return true;
+ const names=listEnv(env.BILLING_EXEMPT_INSTAGRAM);if(!names.length||!env.DB)return false;
+ try{return Boolean(await env.DB.prepare(`SELECT 1 FROM instagram_accounts WHERE workspace_id=? AND lower(username) IN (${names.map(()=>'?').join(',')}) LIMIT 1`).bind(workspace,...names).first());}catch{return false;}
 }
-
-export async function workspacePlan(env,workspace){
+// Free trial: full access (Teams account limit, capped messages) without a card, counted
+// from the owner's signup so creating another workspace cannot restart it.
+export async function trialStatus(env,workspace){
+ const days=Number(env.BILLING_TRIAL_DAYS??7);if(!env.DB||!workspace||!Number.isInteger(days)||days<=0)return null;
+ const row=await env.DB.prepare('SELECT users.created_at FROM workspaces JOIN users ON users.id=workspaces.owner_id WHERE workspaces.id=?').bind(workspace).first();
+ const start=typeof row?.created_at==='string'?Date.parse(row.created_at.includes('T')?row.created_at:row.created_at.replace(' ','T')+'Z'):NaN;if(!Number.isFinite(start))return null;
+ const ends=start+days*86400000,left=ends-Date.now();
+ return{days,active:left>0,ends_at:new Date(ends).toISOString(),days_left:Math.max(0,Math.ceil(left/86400000))};
+}
+function trialPlan(env){const teams=PLAN_TIERS.find(tier=>tier.id==='teams');const messages=Number(env.BILLING_TRIAL_MESSAGES??1000);return{id:'trial',tier:'trial',name:'Teste grátis',accounts:teams.accounts,messages:Number.isSafeInteger(messages)&&messages>0?messages:1000};}
+async function paidPlan(env,workspace){
  const cfg=config(env);if(!cfg||!env.DB||!workspace)return null;
  const row=await env.DB.prepare('SELECT stripe_price_id,subscription_status,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
  if(!row||!['active','trialing'].includes(row.subscription_status)||row.current_period_end<=nowSeconds())return null;
  return commercialPlans().find(plan=>cfg.prices[plan.id]===row.stripe_price_id)||null;
+}
+async function activeTrial(env,workspace){
+ if(env.BILLING_ENFORCED!=='true'||await legacyBillingAccess(env,workspace)||await ownerExempt(env,workspace))return false;
+ return Boolean((await trialStatus(env,workspace))?.active);
+}
+export async function billingAccess(env,workspace){
+ if(env.BILLING_ENFORCED!=='true')return true;
+ if(await legacyBillingAccess(env,workspace)||await ownerExempt(env,workspace))return true;
+ const cfg=config(env);if(!env.DB||!workspace)return false;
+ try{const row=cfg&&await env.DB.prepare('SELECT subscription_status,stripe_price_id,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();if(row&&['active','trialing'].includes(row.subscription_status)&&Object.values(cfg.prices).includes(row.stripe_price_id)&&row.current_period_end>nowSeconds())return true;return await activeTrial(env,workspace);}catch{return false;}
+}
+
+export async function workspacePlan(env,workspace){
+ if(await ownerExempt(env,workspace))return null;
+ const paid=await paidPlan(env,workspace);if(paid)return paid;
+ return env.DB&&workspace&&await activeTrial(env,workspace)?trialPlan(env):null;
 }
 export async function withBillingAccountCapacity(env,workspace,existingId,operation){
  const plan=await workspacePlan(env,workspace);if(!plan)return operation();
