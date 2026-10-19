@@ -1,3 +1,4 @@
+import {withBillingAccountCapacity,billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
 // Additive, idempotent bootstrap: no existing account, token or flow is rewritten.
@@ -23,6 +24,7 @@ export async function zernioConnection(request,env){
   await ensureZernioSchema(env);
   if(!callback){
    const workspace=url.searchParams.get('workspace');if(!await requireMembership(env.DB,user.id,workspace,['owner','admin']))return fail('forbidden',403);
+   if(!await billingAccess(env,workspace))return fail('billing_subscription_required',402);
    const externalId=`flownexa:${url.origin}:${workspace}`;
    let row=await env.DB.prepare('SELECT profile_id FROM zernio_profiles WHERE workspace_id=?').bind(workspace).first();
    if(!row){
@@ -62,10 +64,10 @@ export async function zernioConnection(request,env){
   if(existing.results.some(a=>a.ig_user_id!==externalId))return fail('instagram_account_already_connected',409);
   if(!await requireMembership(env.DB,user.id,row.workspace_id,['owner','admin']))return fail('forbidden',403);
   const localId=existing.results.find(a=>a.ig_user_id===externalId)?.id||crypto.randomUUID();
-  await env.DB.batch([
+  await withBillingAccountCapacity(env,row.workspace_id,existing.results.find(a=>a.ig_user_id===externalId)?.id,()=>env.DB.batch([
    env.DB.prepare("INSERT INTO instagram_accounts(id,workspace_id,username,ig_user_id,status) VALUES(?,?,?,?,'connected') ON CONFLICT(ig_user_id) DO UPDATE SET username=excluded.username,status='connected' WHERE instagram_accounts.workspace_id=excluded.workspace_id").bind(localId,row.workspace_id,remote.username,externalId),
    env.DB.prepare('INSERT INTO zernio_accounts(account_id,remote_id,profile_id,platform_user_id) VALUES(?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET platform_user_id=excluded.platform_user_id WHERE zernio_accounts.profile_id=excluded.profile_id AND zernio_accounts.remote_id=excluded.remote_id').bind(localId,remoteId,row.profile_id,remote.platformUserId)
-  ]);
+  ]));
   return new Response(null,{status:302,headers:{location:new URL('/app?connected=1',url.origin).href,'cache-control':'no-store','referrer-policy':'no-referrer'}});
- }catch{return fail('zernio_connection_failed');}
+ }catch(error){return fail(error.message==='billing_account_limit'?'billing_account_limit':'zernio_connection_failed',error.message==='billing_account_limit'?409:502);}
 }
