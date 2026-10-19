@@ -1,11 +1,11 @@
-import {accountUsable} from './zernio-client.js';
+import {accountUsable, isZernioAccount, zernioMedia} from './zernio-client.js';
 import {respond as J, sha, nowSeconds, getSessionUser, requireMembership, payload, sameOrigin} from './identity.js';
 import {validateGraph} from './conversation-graph.js';
 import {validateFlow} from './flow-runtime.js';
 import {billingAccess, ownerExempt, workspacePlan, messageUsage} from './billing.js';
 import {importInstagramGraph, setFacebookFlowEnabled} from './facebook-api.js';
 import {facebookEnabled, ensureFacebookSchema} from './facebook-schema.js';
-import {messagingReady} from './meta-client.js';
+import {messagingReady, metaRequest} from './meta-client.js';
 
 const editors = ['owner', 'admin'];
 
@@ -173,6 +173,35 @@ export async function agentRuntimeApi(request, env) {
     return J({flow: await setFacebookFlowEnabled(env, agent.workspaceId, publish[1], b.enabled === true)});
    }
   } catch (e) { return J({error: e.status ? e.message : 'facebook_request_failed'}, e.status || 502); }
+  return J({error: 'not_found'}, 404);
+ }
+
+ // Read-only Instagram content for the token workspace: profile, recent posts and a post's comments.
+ if (path.startsWith('/api/v1/agent/instagram/') && request.method === 'GET') {
+  if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const accounts = (await env.DB.prepare("SELECT * FROM instagram_accounts WHERE workspace_id = ? AND status = 'connected' ORDER BY created_at").bind(agent.workspaceId).all()).results;
+  const wanted = url.searchParams.get('account');
+  const account = accounts.find(a => !wanted || a.username === wanted.replace(/^@/, '')) || null;
+  if (!account) return J({error: 'instagram_account_not_found', accounts: accounts.map(a => a.username)}, 404);
+  try {
+   if (path === '/api/v1/agent/instagram/profile') {
+    if (isZernioAccount(account)) return J({username: account.username, provider: 'zernio', note: 'Profile fields are available for accounts connected directly through Meta.'});
+    return J({provider: 'meta', ...(await metaRequest(env, account, 'me?fields=user_id,username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url'))});
+   }
+   if (path === '/api/v1/agent/instagram/media') {
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 25, 1), 100);
+    if (isZernioAccount(account)) return J({username: account.username, media: (await zernioMedia(env, account)).slice(0, limit)});
+    const data = await metaRequest(env, account, `${account.ig_user_id}/media?fields=id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count&limit=${limit}`);
+    return J({username: account.username, media: Array.isArray(data.data) ? data.data : []});
+   }
+   if (path === '/api/v1/agent/instagram/comments') {
+    const media = url.searchParams.get('media_id');
+    if (!/^\d{1,40}$/.test(media || '')) return J({error: 'media_id_required'}, 400);
+    if (isZernioAccount(account)) return J({error: 'comments_available_for_meta_accounts'}, 409);
+    const data = await metaRequest(env, account, `${media}/comments?fields=id,text,username,timestamp,like_count&limit=50`);
+    return J({media_id: media, comments: Array.isArray(data.data) ? data.data : []});
+   }
+  } catch (e) { return J({error: e.message || 'instagram_request_failed'}, 502); }
   return J({error: 'not_found'}, 404);
  }
 

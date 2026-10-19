@@ -122,6 +122,21 @@ export const MCP_TOOLS = [
   inputSchema: { type: 'object', properties: { flow_id: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['flow_id', 'enabled'] }
  },
  {
+  name: 'flownexa_instagram_profile',
+  description: 'Instagram profile of this workspace (bio, website, followers, media count). Optional account: username when the workspace has more than one.',
+  inputSchema: { type: 'object', properties: { account: { type: 'string' } } }
+ },
+ {
+  name: 'flownexa_instagram_media',
+  description: 'Recent Instagram posts and reels of this workspace: caption, type, permalink, date, likes and comments count.',
+  inputSchema: { type: 'object', properties: { limit: { type: 'number' }, account: { type: 'string' } } }
+ },
+ {
+  name: 'flownexa_instagram_comments',
+  description: 'Comments of one Instagram post (text, username, date) to understand what people ask.',
+  inputSchema: { type: 'object', properties: { media_id: { type: 'string' }, account: { type: 'string' } }, required: ['media_id'] }
+ },
+ {
   name: 'flownexa_get_node_templates',
   description: 'Get syntax templates and schema limits for conversation graph nodes (message, buttons, wait_reply, condition, switch, delay, end).',
   inputSchema: {
@@ -198,6 +213,11 @@ export class FlowNexaMcpClient {
 
  async facebookPublish(flowId, enabled) {
   return this.request(`/api/v1/agent/facebook/flows/${encodeURIComponent(flowId)}/publish`, { method: 'POST', body: JSON.stringify({ enabled }) });
+ }
+
+ async instagram(kind, params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => [k, String(v)]));
+  return this.request('/api/v1/agent/instagram/' + kind + (query.size ? '?' + query : ''));
  }
 
  async getTemplates() {
@@ -279,6 +299,12 @@ async function executeToolCall(client, id, name, args) {
    content = JSON.stringify(await client.facebookImport(args), null, 2);
   } else if (name === 'flownexa_facebook_publish_flow') {
    content = JSON.stringify(await client.facebookPublish(args.flow_id, args.enabled), null, 2);
+  } else if (name === 'flownexa_instagram_profile') {
+   content = JSON.stringify(await client.instagram('profile', { account: args.account }), null, 2);
+  } else if (name === 'flownexa_instagram_media') {
+   content = JSON.stringify(await client.instagram('media', { limit: args.limit, account: args.account }), null, 2);
+  } else if (name === 'flownexa_instagram_comments') {
+   content = JSON.stringify(await client.instagram('comments', { media_id: args.media_id, account: args.account }), null, 2);
   } else if (name === 'flownexa_get_node_templates') {
    const res = await client.getTemplates();
    content = JSON.stringify(res, null, 2);
