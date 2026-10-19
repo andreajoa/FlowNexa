@@ -390,7 +390,10 @@ test('remote MCP over HTTP: key required, initialize, tools/list and tools/call 
  const created = await (await app.fetch(new Request('https://app.test/api/agent-tokens', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://app.test', cookie: `fn_session=${sessionToken}` }, body: JSON.stringify({ workspace_id: 'w1', name: 'Remote' }) }), env)).json();
  const rpc = (body, key = created.token) => app.fetch(new Request('https://app.test/mcp', { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { authorization: 'Bearer ' + key } : {}) }, body: JSON.stringify(body) }), env);
  assert.equal((await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize' }, null)).status, 401);
- assert.equal((await (await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize' })).json()).result.serverInfo.name, 'flownexa-mcp');
+ const init = (await (await rpc({ jsonrpc: '2.0', id: 1, method: 'initialize' })).json()).result;
+ assert.equal(init.serverInfo.name, 'flownexa-mcp'); assert.match(init.instructions, /flownexa_get_guide/);
+ const guide = await (await rpc({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'flownexa_get_guide', arguments: {} } })).json();
+ assert.match(guide.result.content[0].text, /Graph contract/);
  assert.equal((await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
  const tools = (await (await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).json()).result.tools.map(x => x.name);
  assert.ok(tools.includes('flownexa_get_overview') && tools.includes('flownexa_facebook_import_instagram_flow'));

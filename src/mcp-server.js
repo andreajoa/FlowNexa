@@ -6,8 +6,14 @@
  */
 
 import { validateGraph } from './conversation-graph.js';
+import { FLOWNEXA_AGENT_INSTRUCTIONS, FLOWNEXA_AGENT_GUIDE } from './mcp-guide.js';
 
 export const MCP_TOOLS = [
+ {
+  name: 'flownexa_get_guide',
+  description: 'Read first: how FlowNexa works, the exact conversation-graph contract and limits, Meta delivery rules and the safe workflow for creating flows.',
+  inputSchema: { type: 'object', properties: {} }
+ },
  {
   name: 'flownexa_list_flows',
   description: 'List all Instagram automation flows in the client workspace, showing IDs, names, trigger types, and node counts.',
@@ -25,6 +31,21 @@ export const MCP_TOOLS = [
     flow_id: { type: 'string', description: 'The UUID of the flow to inspect.' }
    },
    required: ['flow_id']
+  }
+ },
+ {
+  name: 'flownexa_create_flow',
+  description: 'Create a new Instagram automation as a draft. trigger_type: comment_keyword, comment_any, dm_keyword or story_reply. configuration: {keywords:[...], graph:{version:1,start,nodes:[...]}, once_per_contact, entry_points?}. Publish separately with flownexa_publish_flow.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    name: { type: 'string' },
+    trigger_type: { type: 'string', enum: ['comment_keyword', 'comment_any', 'dm_keyword', 'story_reply'] },
+    scope: { type: 'string', enum: ['all', 'selected'] },
+    configuration: { type: 'object' },
+    account: { type: 'string', description: 'Instagram username when the workspace has more than one.' }
+   },
+   required: ['name', 'trigger_type', 'configuration']
   }
  },
  {
@@ -170,6 +191,10 @@ export class FlowNexaMcpClient {
   return data;
  }
 
+ async createFlow(args) {
+  return this.request('/api/v1/agent/flows', { method: 'POST', body: JSON.stringify(args) });
+ }
+
  async listFlows() {
   return this.request('/api/v1/agent/flows');
  }
@@ -238,7 +263,8 @@ export function handleMcpRequest(client, rpc) {
    result: {
     protocolVersion: '2024-11-05',
     capabilities: { tools: {} },
-    serverInfo: { name: 'flownexa-mcp', version: '1.0.0' }
+    serverInfo: { name: 'flownexa-mcp', version: '1.1.0' },
+    instructions: FLOWNEXA_AGENT_INSTRUCTIONS
    }
   };
  }
@@ -270,7 +296,11 @@ export function handleMcpRequest(client, rpc) {
 async function executeToolCall(client, id, name, args) {
  try {
   let content;
-  if (name === 'flownexa_list_flows') {
+  if (name === 'flownexa_get_guide') {
+   content = FLOWNEXA_AGENT_GUIDE;
+  } else if (name === 'flownexa_create_flow') {
+   content = JSON.stringify(await client.createFlow(args), null, 2);
+  } else if (name === 'flownexa_list_flows') {
    const res = await client.listFlows();
    content = JSON.stringify(res, null, 2);
   } else if (name === 'flownexa_get_flow') {

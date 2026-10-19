@@ -244,6 +244,22 @@ export async function agentRuntimeApi(request, env) {
   return J({activity: rows.results});
  }
 
+ // Creates a draft flow (same validation as the panel); publishing stays a separate, explicit step.
+ if (path === '/api/v1/agent/flows' && request.method === 'POST') {
+  if (!agent.scopes.includes('flows:write') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const b = await payload(request, 64000);
+  const accounts = (await env.DB.prepare("SELECT id, username FROM instagram_accounts WHERE workspace_id = ? AND status = 'connected' ORDER BY created_at").bind(agent.workspaceId).all()).results;
+  const account = accounts.find(a => !b.account || a.username === String(b.account).replace(/^@/, ''));
+  if (!account) return J({error: 'instagram_account_not_found', accounts: accounts.map(a => a.username)}, 404);
+  const scope = b.scope || 'all';
+  const valid = validateFlow(b.trigger_type, scope, b.configuration);
+  if (!valid.ok) return J({error: valid.error}, 400);
+  if (typeof b.name !== 'string' || !b.name.trim() || b.name.length > 100) return J({error: 'invalid_name'}, 400);
+  const id = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO flows(id,workspace_id,account_id,name,trigger_type,scope,configuration) VALUES (?,?,?,?,?,?,?)').bind(id, agent.workspaceId, account.id, b.name.trim(), b.trigger_type, scope, JSON.stringify(b.configuration)).run();
+  return J({flow: {id, name: b.name.trim(), trigger_type: b.trigger_type, account: account.username, enabled: false}}, 201);
+ }
+
  if (path === '/api/v1/agent/flows' && request.method === 'GET') {
   if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
   const rows = await env.DB.prepare(
