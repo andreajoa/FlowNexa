@@ -4,7 +4,7 @@ import {validateGraph} from './conversation-graph.js';
 import {validateFlow} from './flow-runtime.js';
 import {billingAccess, ownerExempt, workspacePlan, messageUsage} from './billing.js';
 import {importInstagramGraph, setFacebookFlowEnabled} from './facebook-api.js';
-import {facebookEnabled} from './facebook-schema.js';
+import {facebookEnabled, ensureFacebookSchema} from './facebook-schema.js';
 import {messagingReady} from './meta-client.js';
 
 const editors = ['owner', 'admin'];
@@ -153,6 +153,7 @@ export async function agentRuntimeApi(request, env) {
  if (path.startsWith('/api/v1/agent/facebook/')) {
   if (!facebookEnabled(env, agent.workspaceId)) return J({error: 'facebook_not_available'}, 404);
   try {
+   await ensureFacebookSchema(env);
    if (path === '/api/v1/agent/facebook/flows' && request.method === 'GET') {
     if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
     const pages = (await env.DB.prepare('SELECT id, name, status, provider FROM facebook_accounts WHERE workspace_id = ?').bind(agent.workspaceId).all()).results;
