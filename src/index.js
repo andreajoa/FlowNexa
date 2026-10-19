@@ -1,5 +1,5 @@
 import {facebookApi} from './facebook-api.js';
-import {processFacebookJobs} from './facebook-runtime.js';
+import {processFacebookJobs,metaFacebookWebhook} from './facebook-runtime.js';
 import {zernioConnection} from './zernio-connection.js';
 import {zernioWebhook} from './zernio-webhook.js';
 import {processConversations} from './conversation-runtime.js';
@@ -47,6 +47,7 @@ export default {async fetch(request,env,ctx={}){
  if(path.startsWith('/api/facebook/'))return facebookApi(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
  if(path==='/webhooks/zernio')return zernioWebhook(request,env);
+ if(path==='/webhooks/facebook')return metaFacebookWebhook(request,env);
  if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio')return zernioConnection(request,env);
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);

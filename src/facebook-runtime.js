@@ -3,6 +3,7 @@ import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
 import {normalizeFacebook} from './facebook-webhook.js';
+import {verifyMetaSignature,normalizeMetaEntry,metaSend} from './facebook-meta.js';
 import {walkFacebookGraph,commentOpening,facebookActionBody,validateFacebookGraph} from './facebook-graph.js';
 const rows=async statement=>(await statement.all()).results||[];
 const changes=result=>Number(result?.meta?.changes||0);
@@ -63,16 +64,45 @@ export async function acceptFacebookWebhook(body,env){
   if(body.event==='conversation.control_changed'){await controlChanged(env,account,body);return J({received:true,queued:0});}
   if(body.metadata?.standby===true){await pauseConversation(env,account,body.conversation?.id||body.message?.conversationId);return J({received:true,queued:0});}
   const event=normalizeFacebook(body,account);if(!event)return J({received:true,queued:0});
+  return J({received:true,queued:await queueFacebookEvent(env,account,event)});
+ }catch{return J({error:'facebook_queue_unavailable'},503);}
+}
+// Page webhooks sent by Meta to the FlowNexa app for Pages connected directly (provider 'meta').
+export async function metaFacebookWebhook(request,env){
+ const url=new URL(request.url);
+ if(request.method==='GET'){
+  if(url.searchParams.get('hub.mode')==='subscribe'&&env.FACEBOOK_VERIFY_TOKEN&&url.searchParams.get('hub.verify_token')===env.FACEBOOK_VERIFY_TOKEN)return new Response(url.searchParams.get('hub.challenge')||'',{headers:{'content-type':'text/plain'}});
+  return J({error:'forbidden'},403);
+ }
+ if(request.method!=='POST')return J({error:'method_not_allowed'},405);
+ const raw=new Uint8Array(await request.arrayBuffer());if(raw.byteLength>1048576)return J({error:'payload_too_large'},413);
+ if(!await verifyMetaSignature(raw,request.headers.get('x-hub-signature-256'),env.FACEBOOK_APP_SECRET))return J({error:'invalid_signature'},401);
+ let body;try{body=JSON.parse(new TextDecoder().decode(raw));}catch{return J({error:'invalid_payload'},400);}
+ if(body?.object!=='page'||!Array.isArray(body.entry)||env.FACEBOOK_CHANNEL_ENABLED!=='true'||!env.DB||!env.TOKEN_ENCRYPTION_KEY)return J({received:true,queued:0});
+ try{
+  await ensureFacebookSchema(env);let queued=0;
+  for(const entry of body.entry.slice(0,100)){
+   if(typeof entry?.id!=='string')continue;
+   const account=await env.DB.prepare("SELECT * FROM facebook_accounts WHERE native_id=? AND provider='meta'").bind(entry.id).first();
+   if(!account||account.status!=='connected'||!facebookEnabled(env,account.workspace_id))continue;
+   for(const event of normalizeMetaEntry(entry,account))queued+=await queueFacebookEvent(env,account,event);
+  }
+  return J({received:true,queued});
+ }catch{return J({error:'facebook_queue_unavailable'},503);}
+}
+
+// Shared by every provider: consent, pause, flow matching, graph sessions and the durable queue.
+export async function queueFacebookEvent(env,account,event){
   const recipient=await contactHash(account,event),command=clean(event.text);
   // Only explicit inbound DM commands alter consent. Comments cannot restart consent.
   if(event.kind==='dm'&&['stop','parar','cancelar','unsubscribe','start'].includes(command)){
    const updated=await env.DB.prepare('INSERT INTO facebook_contacts(account_id,recipient_hash,opted_out,last_incoming_at) VALUES(?,?,?,?) ON CONFLICT(account_id,recipient_hash) DO UPDATE SET opted_out=excluded.opted_out,last_incoming_at=MAX(last_incoming_at,excluded.last_incoming_at) WHERE excluded.last_incoming_at>=last_incoming_at').bind(account.id,recipient,command==='start'?0:1,event.at).run();
    if(command!=='start'&&changes(updated))await env.DB.prepare("UPDATE facebook_jobs SET status='paused',error='contact_opted_out' WHERE account_id=? AND recipient_hash=? AND status='pending'").bind(account.id,recipient).run();
-   return J({received:true,queued:0});
+   return 0;
   }
   const consent=await env.DB.prepare('SELECT opted_out FROM facebook_contacts WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).first();
-  if(!facebookSendsEnabled(env,account.workspace_id)||consent?.opted_out||windowError(event)||!await facebookAccess(env,account.workspace_id))return J({received:true,queued:0});
-  if(event.kind==='dm'&&await threadPaused(env,account,event.conversation_id,event.at))return J({received:true,queued:0});
+  if(!facebookSendsEnabled(env,account.workspace_id)||consent?.opted_out||windowError(event)||!await facebookAccess(env,account.workspace_id))return 0;
+  if(event.kind==='dm'&&await threadPaused(env,account,event.conversation_id,event.at))return 0;
   // A contact answering a conversation that is waiting on a reply continues that graph first.
   let flow=null,plan=null;
   if(event.kind==='dm'){
@@ -85,11 +115,11 @@ export async function acceptFacebookWebhook(body,env){
    flow=flows.filter(f=>matches(f,event)&&(!f.published_at||event.at>=f.published_at)).sort((a,b)=>Number(b.trigger_type.endsWith('_keyword'))-Number(a.trigger_type.endsWith('_keyword'))||a.id.localeCompare(b.id))[0];
    if(flow?.response_kind==='graph'){const graph=JSON.parse(flow.graph);plan={session:false,...walkFacebookGraph(graph,graph.start,{text:event.text,payload:event.payload})};}
   }
-  if(!flow)return J({received:true,queued:0});
+  if(!flow)return 0;
   if(plan){
    // A comment allows one private reply; Messenger continues only once the person answers it.
    if(event.kind==='comment'){const opening=commentOpening(plan.actions);plan={session:false,actions:opening?[opening]:[],wait:null};}
-   if(!plan.actions.length&&!plan.wait){await env.DB.prepare('DELETE FROM facebook_sessions WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).run();return J({received:true,queued:0});}
+   if(!plan.actions.length&&!plan.wait){await env.DB.prepare('DELETE FROM facebook_sessions WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).run();return 0;}
   }
   const id=await sha('facebook:'+account.id+':'+event.key),now=Date.now(),job=await sha('facebook-job:'+id);
   const payload=await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),action=await encryptToken(JSON.stringify(plan?{event,kind:'graph',session:plan.session,actions:plan.actions}:{event,kind:flow.response_kind,text:flow.response_text}),env.TOKEN_ENCRYPTION_KEY);
@@ -101,8 +131,7 @@ export async function acceptFacebookWebhook(body,env){
    if(plan.wait)await env.DB.prepare('INSERT INTO facebook_sessions(account_id,recipient_hash,flow_id,flow_version,node_id,expires_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(account_id,recipient_hash) DO UPDATE SET flow_id=excluded.flow_id,flow_version=excluded.flow_version,node_id=excluded.node_id,expires_at=excluded.expires_at,updated_at=excluded.updated_at').bind(account.id,recipient,flow.id,flow.version,plan.wait.on_reply,now+Math.min(86400,Number(plan.wait.timeout_seconds)||86400)*1000,now).run();
    else await env.DB.prepare('DELETE FROM facebook_sessions WHERE account_id=? AND recipient_hash=?').bind(account.id,recipient).run();
   }
-  return J({received:true,queued:changes(result[1])});
- }catch{return J({error:'facebook_queue_unavailable'},503);}
+  return changes(result[1]);
 }
 async function finish(env,id,status,error=null,provider=null,lease=null){
  const condition=lease?"status='sending' AND lease_id=?":"status='pending'";
@@ -152,7 +181,10 @@ export async function processFacebookJobs(env,limit=5,deadline=Date.now()+8000){
    }
    const providerId=result=>result.data?.messageId||result.data?.commentId||result.messageId||result.message?.platformMessageId||result.message?.id||result.comment?.id||result.id;
    let provider;
-   if(graphJob){
+   if(account.provider==='meta'){
+    const steps=graphJob?action.actions:[{type:event.kind==='dm'?'message':action.kind,text:action.text}];
+    for(const step of steps){attempted=true;provider=await metaSend(env,account,event,step,deadline);if(typeof provider!=='string'||!provider.trim())throw Error('delivery_unknown');}
+   }else if(graphJob){
     // Messages of one step go out in order; a failure after the first acceptance is uncertain, never resent.
     for(const step of action.actions){const request=facebookActionBody(account,event,step);attempted=true;const result=await zernioRequest({...env,RUNTIME_DEADLINE_MS:deadline},request.path,{method:'POST',body:request.body});provider=providerId(result);if(typeof provider!=='string'||!provider.trim())throw Error('delivery_unknown');}
    }else{
@@ -174,8 +206,8 @@ export async function processFacebookJobs(env,limit=5,deadline=Date.now()+8000){
    }
    if(error.message==='processing_deferred'&&reserved){await env.DB.prepare("UPDATE facebook_jobs SET status='pending',due_at=?,lease_until=NULL,error='processing_deferred' WHERE id=? AND status='sending' AND lease_id=?").bind(Date.now()+1000,job.id,ownedLease).run();continue;}
    if(error.message==='meta_rate_limited'&&reserved&&job.attempts<2){await env.DB.prepare("UPDATE facebook_jobs SET status='pending',due_at=?,lease_until=NULL,error='rate_limited' WHERE id=? AND status='sending' AND lease_id=?").bind(Date.now()+60000*(job.attempts+1),job.id,ownedLease).run();continue;}
-   const uncertain=reserved&&(error.message==='delivery_unknown'||attempted&&!['account_reconnect_required','zernio_request_rejected','meta_rate_limited','processing_deferred'].includes(error.message));
-   const safe=['thread_standby','contact_opted_out','message_window_expired','private_reply_already_sent','invalid_action','account_reconnect_required','zernio_request_rejected','meta_rate_limited','processing_deferred'].includes(error.message)?error.message:'facebook_send_failed';
+   const uncertain=reserved&&(error.message==='delivery_unknown'||attempted&&!['account_reconnect_required','zernio_request_rejected','meta_request_rejected','meta_rate_limited','processing_deferred'].includes(error.message));
+   const safe=['thread_standby','contact_opted_out','message_window_expired','private_reply_already_sent','invalid_action','account_reconnect_required','zernio_request_rejected','meta_request_rejected','meta_rate_limited','processing_deferred'].includes(error.message)?error.message:'facebook_send_failed';
    await finish(env,job.id,uncertain?'unknown':error.message==='thread_standby'?'paused':'failed',uncertain?'delivery_unknown':safe,null,ownedLease);summary[uncertain?'unknown':'failed']++;
   }
  }

@@ -364,3 +364,22 @@ test('agent overview and activity report only the token workspace, read-only', a
  assert.ok(MCP_TOOLS.some(tool => tool.name === 'flownexa_get_overview'));
  assert.equal((await app.fetch(new Request('https://app.test/api/v1/agent/overview'), env)).status, 401);
 });
+
+test('agent copies an Instagram graph to the Facebook Page as a draft and publishes it', async (t) => {
+ const { db, env } = setup(t);
+ Object.assign(env, { FACEBOOK_CHANNEL_ENABLED: 'true', FACEBOOK_SENDS_ENABLED: 'true', FACEBOOK_PILOT_WORKSPACES: '*' });
+ const sessionToken = await sessionFor('u1', env);
+ const created = await (await app.fetch(new Request('https://app.test/api/agent-tokens', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://app.test', cookie: `fn_session=${sessionToken}` }, body: JSON.stringify({ workspace_id: 'w1', name: 'FB' }) }), env)).json();
+ const { ensureFacebookSchema } = await import('../src/facebook-schema.js');
+ await ensureFacebookSchema(env);
+ db.sqlite.exec("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at) VALUES('fbp','w1','abcdefabcdefabcdefabcdef','p','777','Brand','connected',1)");
+ const client = new FlowNexaMcpClient({ baseUrl: 'https://app.test', apiKey: created.token });
+ const realFetch = globalThis.fetch; globalThis.fetch = (url, options) => app.fetch(new Request(url, options), env); t.after(() => { globalThis.fetch = realFetch; });
+ const { flow } = await client.facebookImport({ instagram_flow_id: 'f1', trigger_type: 'dm_any' });
+ assert.equal(flow.response_kind, 'graph'); assert.equal(flow.enabled, 0); assert.equal(flow.node_count, 5);
+ const published = await client.facebookPublish(flow.id, true);
+ assert.equal(published.flow.enabled, 1);
+ const listed = await client.facebookFlows();
+ assert.equal(listed.pages[0].name, 'Brand'); assert.equal(listed.flows[0].enabled, true);
+ await assert.rejects(client.facebookImport({ instagram_flow_id: 'missing' }), /facebook_source_not_found/);
+});

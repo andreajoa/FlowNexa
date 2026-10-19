@@ -1,4 +1,6 @@
 import {validateFacebookGraph} from './facebook-graph.js';
+import {encryptToken} from './instagram-oauth.js';
+import {metaConfigured,metaAuthorizationUrl,metaPagesFromCode,subscribeMetaPage,sealPages,openPages} from './facebook-meta.js';
 import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds,sameOrigin,payload} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
 import {facebookEnabled,facebookAccess,facebookSendsEnabled,facebookMonthlyLimit,ensureFacebookSchema} from './facebook-schema.js';
@@ -6,7 +8,7 @@ const oid=id=>typeof id==='string'&&/^[a-f0-9]{24}$/i.test(id);
 // Business-portfolio Pages come back as '<userId>:page:<pageId>'; webhooks identify the Page by pageId.
 const pageNativeId=id=>typeof id==='string'?id.match(/^(?:\d{1,100}:page:)?(\d{1,100})$/)?.[1]||null:null;
 const profileId=p=>typeof p==='string'?p:p?._id;
-const safeAccount=a=>({id:a.id,name:a.name,native_id:a.native_id,status:a.status});
+const safeAccount=a=>({id:a.id,name:a.name,native_id:a.native_id,status:a.status,provider:a.provider||'zernio'});
 const safeFlow=f=>{const graph=f.graph?JSON.parse(f.graph):null;return{...f,keywords:JSON.parse(f.keywords),graph,node_count:graph?.nodes?.length||0};};
 const fail=(message,status=400)=>Object.assign(Error(message),{status});
 export function facebookFlowInput(body){
@@ -30,8 +32,34 @@ async function findOrCreateProfile(env,workspace,origin){
  await env.DB.prepare('INSERT OR IGNORE INTO facebook_profiles(workspace_id,profile_id) VALUES(?,?)').bind(workspace,profiles[0]._id).run();
  row=await env.DB.prepare('SELECT profile_id FROM facebook_profiles WHERE workspace_id=?').bind(workspace).first();return row.profile_id;
 }
+export async function importInstagramGraph(env,workspace,body){
+ await ensureFacebookSchema(env);
+ const source=await env.DB.prepare('SELECT name,configuration FROM flows WHERE id=? AND workspace_id=?').bind(body.instagram_flow_id,workspace).first();if(!source)throw fail('facebook_source_not_found',404);
+ let graph=null;try{graph=JSON.parse(source.configuration)?.graph;}catch{}if(!graph)throw fail('facebook_source_without_graph',409);
+ const account=body.account_id?await env.DB.prepare('SELECT * FROM facebook_accounts WHERE id=? AND workspace_id=?').bind(body.account_id,workspace).first():await env.DB.prepare("SELECT * FROM facebook_accounts WHERE workspace_id=? AND status='connected' LIMIT 1").bind(workspace).first();
+ if(!account||account.status!=='connected')throw fail('facebook_page_not_connected',409);
+ const fields=facebookFlowInput({name:(typeof body.name==='string'&&body.name.trim()?body.name:source.name+' · Facebook').slice(0,100),trigger_type:body.trigger_type||'dm_any',keywords:body.keywords||[],response_kind:'graph',graph});
+ const count=await env.DB.prepare('SELECT count(*) n FROM facebook_flows WHERE workspace_id=?').bind(workspace).first();if(count.n>=30)throw fail('facebook_flow_limit',409);
+ const id=crypto.randomUUID();
+ await env.DB.prepare('INSERT INTO facebook_flows(id,workspace_id,account_id,name,trigger_type,keywords,response_kind,response_text,graph,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(id,workspace,account.id,fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,fields.graph,nowSeconds(),nowSeconds()).run();
+ return safeFlow(await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=?').bind(id).first());
+}
+// Publishing/pausing shared by the panel and agents: a flow must still validate when it goes live.
+export async function setFacebookFlowEnabled(env,workspace,flowId,enabled){
+ await ensureFacebookSchema(env);
+ const flow=await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=? AND workspace_id=?').bind(flowId,workspace).first();if(!flow)throw fail('facebook_flow_not_found',404);
+ if(!enabled){await env.DB.batch([env.DB.prepare('UPDATE facebook_flows SET enabled=0,version=version+1,updated_at=? WHERE id=?').bind(nowSeconds(),flow.id),env.DB.prepare("UPDATE facebook_jobs SET status='cancelled',error='flow_paused' WHERE flow_id=? AND status IN ('pending','retry')").bind(flow.id)]);}
+ else{
+  if(!facebookSendsEnabled(env,workspace))throw fail('facebook_sends_disabled',409);
+  const account=await env.DB.prepare('SELECT status FROM facebook_accounts WHERE id=?').bind(flow.account_id).first();if(account?.status!=='connected')throw fail('facebook_page_not_connected',409);
+  facebookFlowInput({...flow,keywords:JSON.parse(flow.keywords),graph:flow.graph});
+  if(flow.trigger_type.endsWith('_any')){const conflict=await env.DB.prepare('SELECT id FROM facebook_flows WHERE account_id=? AND trigger_type=? AND enabled=1 AND id<>?').bind(flow.account_id,flow.trigger_type,flow.id).first();if(conflict)throw fail('facebook_flow_conflict',409);}
+  await env.DB.prepare('UPDATE facebook_flows SET enabled=1,version=version+1,published_at=?,updated_at=? WHERE id=?').bind(Date.now(),nowSeconds(),flow.id).run();
+ }
+ return safeFlow(await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=?').bind(flow.id).first());
+}
 export async function facebookApi(request,env){
- const url=new URL(request.url),path=url.pathname,callback=path==='/api/facebook/callback';let callbackWorkspace=null;
+ const url=new URL(request.url),path=url.pathname,metaCallback=path==='/api/facebook/meta/callback',callback=path==='/api/facebook/callback'||metaCallback;let callbackWorkspace=null;
  const errorResponse=(code,status)=>{if(callback&&request.headers.get('accept')?.includes('text/html'))return new Response(null,{status:302,headers:{location:new URL('/app?facebook_error='+encodeURIComponent(code)+(callbackWorkspace?'&workspace='+encodeURIComponent(callbackWorkspace):'')+'#facebook',url.origin).href,'cache-control':'no-store','referrer-policy':'no-referrer'}});return J({error:code},status);};
  if(!env.DB)return J({error:'database_unavailable'},503);
  if(request.method!=='GET'&&!sameOrigin(request))return J({error:'invalid_origin'},403);
@@ -40,12 +68,21 @@ export async function facebookApi(request,env){
   if(callback){
    if(request.method!=='GET')throw fail('method_not_allowed',405);
    if(env.FACEBOOK_CHANNEL_ENABLED!=='true')throw fail('facebook_not_available',404);
-   await ensureFacebookSchema(env);const state=url.searchParams.get('fn_state');if(!state||state.length>200)throw fail('invalid_state',403);
+   await ensureFacebookSchema(env);const state=url.searchParams.get(metaCallback?'state':'fn_state');if(!state||state.length>200)throw fail('invalid_state',403);
    const hash=await sha(state+':'+cookieToken(request)),row=await env.DB.prepare('SELECT * FROM facebook_oauth_states WHERE state_hash=? AND expires_at>?').bind(hash,nowSeconds()).first();
    if(!row||row.user_id!==user.id)throw fail('invalid_state',403);callbackWorkspace=row.workspace_id;
    if(!facebookEnabled(env,row.workspace_id)||!await requireMembership(env.DB,user.id,row.workspace_id,['owner','admin']))throw fail('forbidden',403);
    const consumed=await env.DB.prepare('DELETE FROM facebook_oauth_states WHERE state_hash=? AND expires_at>?').bind(hash,nowSeconds()).run();if(!consumed.meta.changes)throw fail('state_used',403);
    if(!await facebookAccess(env,row.workspace_id))throw fail('billing_subscription_required',402);
+   if(metaCallback){
+    if(row.profile_id!=='meta')throw fail('invalid_state',403);
+    if(url.searchParams.has('error'))throw fail(url.searchParams.get('error_reason')==='user_denied'?'facebook_authorization_denied':'facebook_authorization_failed',409);
+    const code=url.searchParams.get('code');if(!code||code.length>2000)throw fail('facebook_authorization_failed',400);
+    let pages;try{pages=await metaPagesFromCode(env,url.origin,code);}catch(e){console.warn(JSON.stringify({event:'facebook_meta_oauth_failed',workspace_id:row.workspace_id,error:e.message}));throw fail('facebook_authorization_failed',409);}
+    if(!pages.length)throw fail('facebook_no_pages',409);
+    await env.DB.prepare('INSERT INTO facebook_meta_pending(user_id,workspace_id,encrypted_pages,expires_at) VALUES(?,?,?,?) ON CONFLICT(user_id,workspace_id) DO UPDATE SET encrypted_pages=excluded.encrypted_pages,expires_at=excluded.expires_at').bind(user.id,row.workspace_id,await sealPages(env,pages),nowSeconds()+900).run();
+    return new Response(null,{status:302,headers:{location:new URL('/app?facebook_select=1&workspace='+encodeURIComponent(row.workspace_id)+'#facebook',url.origin).href,'cache-control':'no-store','referrer-policy':'no-referrer'}});
+   }
    if(url.searchParams.has('error')){
     const providerError=url.searchParams.get('error'),reason=url.searchParams.get('error_reason');
     const knownErrors=['no_facebook_pages','oauth_denied','account_limit_exceeded','profile_limit_exceeded','payment_required','facebook_pages_error','token_exchange_failed'];
@@ -79,6 +116,35 @@ export async function facebookApi(request,env){
   if(path==='/api/facebook/flows'&&request.method==='GET')return J({flows:(await env.DB.prepare('SELECT * FROM facebook_flows WHERE workspace_id=? ORDER BY created_at DESC').bind(workspace).all()).results.map(safeFlow)});
   if(path==='/api/facebook/executions'&&request.method==='GET')return J({executions:(await env.DB.prepare('SELECT id,flow_id,status,error,attempt_at,completed_at FROM facebook_jobs WHERE workspace_id=? ORDER BY rowid DESC LIMIT 50').bind(workspace).all()).results});
   if(!manage)throw fail('forbidden',403);
+  // New Pages connect directly through the FlowNexa Meta app; Pages already on Zernio reconnect there.
+  if(path==='/api/facebook/connect'&&request.method==='GET'&&metaConfigured(env)){
+   const reconnect=url.searchParams.get('reconnect_id'),existing=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
+   if(!existing||reconnect&&reconnect===existing.id&&existing.provider==='meta'){
+    if(existing&&!reconnect)throw fail('facebook_pilot_page_limit',409);
+    if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
+    const state=crypto.randomUUID()+crypto.randomUUID(),hash=await sha(state+':'+cookieToken(request));
+    await env.DB.prepare('INSERT INTO facebook_oauth_states(state_hash,user_id,workspace_id,profile_id,reconnect_id,expires_at) VALUES(?,?,?,?,?,?)').bind(hash,user.id,workspace,'meta',reconnect||null,nowSeconds()+600).run();
+    return J({authorization_url:metaAuthorizationUrl(env,url.origin,state)});
+   }
+  }
+  if(path==='/api/facebook/meta/pages'&&request.method==='GET'){
+   const pending=await env.DB.prepare('SELECT * FROM facebook_meta_pending WHERE user_id=? AND workspace_id=? AND expires_at>?').bind(user.id,workspace,nowSeconds()).first();
+   return J({pages:pending?(await openPages(env,pending.encrypted_pages)).map(p=>({id:p.id,name:p.name})):[]});
+  }
+  if(path==='/api/facebook/meta/select'&&request.method==='POST'){
+   if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
+   const pending=await env.DB.prepare('SELECT * FROM facebook_meta_pending WHERE user_id=? AND workspace_id=? AND expires_at>?').bind(user.id,workspace,nowSeconds()).first();if(!pending)throw fail('facebook_selection_expired',409);
+   const page=(await openPages(env,pending.encrypted_pages)).find(p=>p.id===body.page_id);if(!page)throw fail('facebook_page_not_found',404);
+   const existing=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE workspace_id=? LIMIT 1').bind(workspace).first();
+   if(existing&&(existing.native_id!==page.id||existing.provider!=='meta'))throw fail('facebook_pilot_page_limit',409);
+   const elsewhere=await env.DB.prepare('SELECT workspace_id FROM facebook_accounts WHERE native_id=? AND workspace_id<>?').bind(page.id,workspace).first();if(elsewhere)throw fail('facebook_page_already_connected',409);
+   try{await subscribeMetaPage(env,page);}catch(e){console.warn(JSON.stringify({event:'facebook_meta_subscribe_failed',workspace_id:workspace,error:e.message}));throw fail('facebook_subscription_failed',409);}
+   const sealed=await encryptToken(page.token,env.TOKEN_ENCRYPTION_KEY);
+   if(existing)await env.DB.prepare("UPDATE facebook_accounts SET name=?,encrypted_token=?,status='connected' WHERE id=?").bind(page.name,sealed,existing.id).run();
+   else await env.DB.prepare("INSERT INTO facebook_accounts(id,workspace_id,remote_id,profile_id,native_id,name,status,created_at,provider,encrypted_token) VALUES(?,?,?,?,?,?,'connected',?,'meta',?)").bind(crypto.randomUUID(),workspace,'meta:'+page.id,'meta',page.id,page.name,nowSeconds(),sealed).run();
+   await env.DB.prepare('DELETE FROM facebook_meta_pending WHERE user_id=? AND workspace_id=?').bind(user.id,workspace).run();
+   return J({connected:true,page:{id:page.id,name:page.name}});
+  }
   if(path==='/api/facebook/connect'&&request.method==='GET'){
    if(!env.ZERNIO_API_KEY||!env.ZERNIO_WEBHOOK_SECRET||!env.TOKEN_ENCRYPTION_KEY)throw fail('facebook_not_configured',503);
    if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
@@ -114,14 +180,7 @@ export async function facebookApi(request,env){
   // Reuses a conversation built in the Instagram node editor of the same workspace as a Facebook draft.
   if(path==='/api/facebook/flows/import'&&request.method==='POST'){
    if(!await facebookAccess(env,workspace))throw fail('billing_subscription_required',402);
-   const source=await env.DB.prepare('SELECT name,configuration FROM flows WHERE id=? AND workspace_id=?').bind(body.instagram_flow_id,workspace).first();if(!source)throw fail('facebook_source_not_found',404);
-   let graph=null;try{graph=JSON.parse(source.configuration)?.graph;}catch{}if(!graph)throw fail('facebook_source_without_graph',409);
-   const account=await env.DB.prepare('SELECT * FROM facebook_accounts WHERE id=? AND workspace_id=?').bind(body.account_id,workspace).first();if(!account||account.status!=='connected')throw fail('facebook_page_not_connected',409);
-   const fields=facebookFlowInput({name:(typeof body.name==='string'&&body.name.trim()?body.name:source.name+' · Facebook').slice(0,100),trigger_type:body.trigger_type||'dm_any',keywords:body.keywords||[],response_kind:'graph',graph});
-   const count=await env.DB.prepare('SELECT count(*) n FROM facebook_flows WHERE workspace_id=?').bind(workspace).first();if(count.n>=30)throw fail('facebook_flow_limit',409);
-   const id=crypto.randomUUID();
-   await env.DB.prepare('INSERT INTO facebook_flows(id,workspace_id,account_id,name,trigger_type,keywords,response_kind,response_text,graph,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(id,workspace,account.id,fields.name,fields.trigger_type,JSON.stringify(fields.keywords),fields.response_kind,fields.response_text,fields.graph,nowSeconds(),nowSeconds()).run();
-   return J({flow:safeFlow(await env.DB.prepare('SELECT * FROM facebook_flows WHERE id=?').bind(id).first())});
+   return J({flow:await importInstagramGraph(env,workspace,body)});
   }
   const match=path.match(/^\/api\/facebook\/flows\/([^/]+)(?:\/(publish|pause))?$/);
   if(request.method==='POST'&&(path==='/api/facebook/flows'||match)){

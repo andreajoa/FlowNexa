@@ -3,6 +3,8 @@ import {respond as J, sha, nowSeconds, getSessionUser, requireMembership, payloa
 import {validateGraph} from './conversation-graph.js';
 import {validateFlow} from './flow-runtime.js';
 import {billingAccess, ownerExempt, workspacePlan, messageUsage} from './billing.js';
+import {importInstagramGraph, setFacebookFlowEnabled} from './facebook-api.js';
+import {facebookEnabled} from './facebook-schema.js';
 import {messagingReady} from './meta-client.js';
 
 const editors = ['owner', 'admin'];
@@ -145,6 +147,32 @@ export async function agentRuntimeApi(request, env) {
     end: {id: 'end', type: 'end'}
    }
   });
+ }
+
+ // Facebook Page flows for the token workspace: list, import an Instagram graph as a draft, publish/pause.
+ if (path.startsWith('/api/v1/agent/facebook/')) {
+  if (!facebookEnabled(env, agent.workspaceId)) return J({error: 'facebook_not_available'}, 404);
+  try {
+   if (path === '/api/v1/agent/facebook/flows' && request.method === 'GET') {
+    if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+    const pages = (await env.DB.prepare('SELECT id, name, status, provider FROM facebook_accounts WHERE workspace_id = ?').bind(agent.workspaceId).all()).results;
+    const flows = (await env.DB.prepare('SELECT id, account_id, name, trigger_type, response_kind, enabled, version, graph FROM facebook_flows WHERE workspace_id = ? ORDER BY created_at DESC').bind(agent.workspaceId).all()).results.map(f => ({...f, enabled: Boolean(f.enabled), graph: undefined, node_count: f.graph ? JSON.parse(f.graph).nodes.length : 0}));
+    return J({pages, flows});
+   }
+   if (path === '/api/v1/agent/facebook/import' && request.method === 'POST') {
+    if (!agent.scopes.includes('flows:write') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+    if (!await billingAccess(env, agent.workspaceId)) return J({error: 'billing_subscription_required'}, 402);
+    return J({flow: await importInstagramGraph(env, agent.workspaceId, await payload(request, 8000))});
+   }
+   const publish = path.match(/^\/api\/v1\/agent\/facebook\/flows\/([^/]+)\/publish$/);
+   if (publish && request.method === 'POST') {
+    if (!agent.scopes.includes('flows:publish') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+    const b = await payload(request, 2000);
+    if (b.enabled && !await billingAccess(env, agent.workspaceId)) return J({error: 'billing_subscription_required'}, 402);
+    return J({flow: await setFacebookFlowEnabled(env, agent.workspaceId, publish[1], b.enabled === true)});
+   }
+  } catch (e) { return J({error: e.status ? e.message : 'facebook_request_failed'}, e.status || 502); }
+  return J({error: 'not_found'}, 404);
  }
 
  // Read-only reporting for owners' agents: accounts, plan access, volume and outcomes.

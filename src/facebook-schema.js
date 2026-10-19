@@ -22,10 +22,18 @@ export const FACEBOOK_GRAPH_SCHEMA=[
  "ALTER TABLE facebook_flows ADD COLUMN graph TEXT",
  "CREATE TABLE IF NOT EXISTS facebook_sessions(account_id TEXT NOT NULL REFERENCES facebook_accounts(id) ON DELETE CASCADE,recipient_hash TEXT NOT NULL,flow_id TEXT NOT NULL REFERENCES facebook_flows(id) ON DELETE CASCADE,flow_version INTEGER NOT NULL,node_id TEXT NOT NULL,expires_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(account_id,recipient_hash))"
 ];
-export function facebookEnabled(env,workspace){return env.FACEBOOK_CHANNEL_ENABLED==='true'&&typeof workspace==='string'&&(env.FACEBOOK_PILOT_WORKSPACES||'').split(',').map(s=>s.trim()).filter(Boolean).includes(workspace);}
+// Direct Meta connections: provider per Page (existing rows stay 'zernio'), its encrypted Page
+// token, and the short-lived list of Pages a login returned, waiting for the owner to pick one.
+export const FACEBOOK_META_SCHEMA=[
+ "ALTER TABLE facebook_accounts ADD COLUMN provider TEXT NOT NULL DEFAULT 'zernio'",
+ "ALTER TABLE facebook_accounts ADD COLUMN encrypted_token TEXT",
+ "CREATE TABLE IF NOT EXISTS facebook_meta_pending(user_id TEXT NOT NULL,workspace_id TEXT NOT NULL,encrypted_pages TEXT NOT NULL,expires_at INTEGER NOT NULL,PRIMARY KEY(user_id,workspace_id))"
+];
+// FACEBOOK_PILOT_WORKSPACES lists workspaces, or '*' to open the channel to every workspace.
+export function facebookEnabled(env,workspace){const list=(env.FACEBOOK_PILOT_WORKSPACES||'').split(',').map(s=>s.trim()).filter(Boolean);return env.FACEBOOK_CHANNEL_ENABLED==='true'&&typeof workspace==='string'&&!!workspace&&(list.includes('*')||list.includes(workspace));}
 export function facebookSendsEnabled(env,workspace){return facebookEnabled(env,workspace)&&env.FACEBOOK_SENDS_ENABLED==='true';}
 export function facebookMonthlyLimit(env){const n=Number(env.FACEBOOK_MONTHLY_MESSAGE_LIMIT||1000);return Number.isSafeInteger(n)&&n>0&&n<=10000?n:1000;}
 const ready=new WeakSet();
-export async function ensureFacebookSchema(env){if(!env.DB)throw Error('database_unavailable');if(ready.has(env.DB))return;try{await env.DB.prepare('SELECT 1 FROM facebook_effects LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_threads LIMIT 1').first();}catch{for(const sql of FACEBOOK_SCHEMA)await env.DB.prepare(sql).run();}try{await env.DB.prepare('SELECT graph FROM facebook_flows LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_sessions LIMIT 1').first();}catch{for(const sql of FACEBOOK_GRAPH_SCHEMA){try{await env.DB.prepare(sql).run();}catch(e){if(!/duplicate column/i.test(String(e?.message)))throw e;}}}ready.add(env.DB);}
+export async function ensureFacebookSchema(env){if(!env.DB)throw Error('database_unavailable');if(ready.has(env.DB))return;try{await env.DB.prepare('SELECT 1 FROM facebook_effects LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_threads LIMIT 1').first();}catch{for(const sql of FACEBOOK_SCHEMA)await env.DB.prepare(sql).run();}try{await env.DB.prepare('SELECT graph FROM facebook_flows LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_sessions LIMIT 1').first();}catch{for(const sql of FACEBOOK_GRAPH_SCHEMA){try{await env.DB.prepare(sql).run();}catch(e){if(!/duplicate column/i.test(String(e?.message)))throw e;}}}try{await env.DB.prepare('SELECT provider,encrypted_token FROM facebook_accounts LIMIT 1').first();await env.DB.prepare('SELECT 1 FROM facebook_meta_pending LIMIT 1').first();}catch{for(const sql of FACEBOOK_META_SCHEMA){try{await env.DB.prepare(sql).run();}catch(e){if(!/duplicate column/i.test(String(e?.message)))throw e;}}}ready.add(env.DB);}
 
 export async function facebookAccess(env,workspace){return facebookEnabled(env,workspace)&&await billingAccess(env,workspace);}

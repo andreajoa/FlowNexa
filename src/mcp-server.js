@@ -98,6 +98,30 @@ export const MCP_TOOLS = [
   }
  },
  {
+  name: 'flownexa_facebook_list_flows',
+  description: 'List the connected Facebook Page(s) and Facebook flows (name, trigger, enabled, node count) of this profile.',
+  inputSchema: { type: 'object', properties: {} }
+ },
+ {
+  name: 'flownexa_facebook_import_instagram_flow',
+  description: 'Copy an Instagram conversation graph of this workspace to the Facebook Page as a draft. trigger_type: dm_any (Messenger), dm_keyword, comment_any or comment_keyword.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    instagram_flow_id: { type: 'string' },
+    trigger_type: { type: 'string', enum: ['dm_any', 'dm_keyword', 'comment_any', 'comment_keyword'] },
+    keywords: { type: 'array', items: { type: 'string' } },
+    name: { type: 'string' }
+   },
+   required: ['instagram_flow_id']
+  }
+ },
+ {
+  name: 'flownexa_facebook_publish_flow',
+  description: 'Publish (enabled=true) or pause (enabled=false) a Facebook flow.',
+  inputSchema: { type: 'object', properties: { flow_id: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['flow_id', 'enabled'] }
+ },
+ {
   name: 'flownexa_get_node_templates',
   description: 'Get syntax templates and schema limits for conversation graph nodes (message, buttons, wait_reply, condition, switch, delay, end).',
   inputSchema: {
@@ -161,6 +185,18 @@ export class FlowNexaMcpClient {
   if (limit) query.set('limit', String(limit));
   if (status) query.set('status', status);
   return this.request('/api/v1/agent/activity' + (query.size ? '?' + query : ''));
+ }
+
+ async facebookFlows() {
+  return this.request('/api/v1/agent/facebook/flows');
+ }
+
+ async facebookImport(args) {
+  return this.request('/api/v1/agent/facebook/import', { method: 'POST', body: JSON.stringify(args) });
+ }
+
+ async facebookPublish(flowId, enabled) {
+  return this.request(`/api/v1/agent/facebook/flows/${encodeURIComponent(flowId)}/publish`, { method: 'POST', body: JSON.stringify({ enabled }) });
  }
 
  async getTemplates() {
@@ -236,6 +272,12 @@ async function executeToolCall(client, id, name, args) {
    content = JSON.stringify(await client.getOverview(), null, 2);
   } else if (name === 'flownexa_get_activity') {
    content = JSON.stringify(await client.getActivity(args.limit, args.status), null, 2);
+  } else if (name === 'flownexa_facebook_list_flows') {
+   content = JSON.stringify(await client.facebookFlows(), null, 2);
+  } else if (name === 'flownexa_facebook_import_instagram_flow') {
+   content = JSON.stringify(await client.facebookImport(args), null, 2);
+  } else if (name === 'flownexa_facebook_publish_flow') {
+   content = JSON.stringify(await client.facebookPublish(args.flow_id, args.enabled), null, 2);
   } else if (name === 'flownexa_get_node_templates') {
    const res = await client.getTemplates();
    content = JSON.stringify(res, null, 2);
