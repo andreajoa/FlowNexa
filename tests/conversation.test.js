@@ -34,7 +34,7 @@ test('delay is durable and cannot send outside the last genuine inbound 24-hour 
 });
 test('pause, version change, disconnect and billing enforcement cancel durable conversations',async t=>{
  for(const mutation of ["UPDATE flows SET enabled=0","UPDATE flows SET version=version+1","UPDATE instagram_accounts SET status='disconnected'"]){const{db,env,sent}=await setup(t);await ingest(env,dm('start'));db.sqlite.exec(mutation+';UPDATE conversation_sessions SET due_at=0');await processConversations(env);assert.equal(sent.length,1);assert.equal((await session(db)).status,'cancelled');}
- const{db,env,sent}=await setup(t);await ingest(env,dm('start'));env.BILLING_ENFORCED='true';db.sqlite.exec('UPDATE conversation_sessions SET due_at=0');await processConversations(env);assert.equal(sent.length,1);assert.equal((await session(db)).status,'cancelled');
+ const{db,env,sent}=await setup(t);await ingest(env,dm('start'));env.BILLING_ENFORCED='true';env.BILLING_TRIAL_DAYS='0';db.sqlite.exec('UPDATE conversation_sessions SET due_at=0');await processConversations(env);assert.equal(sent.length,1);assert.equal((await session(db)).status,'cancelled');
 });
 test('uncertain message result is never retried and never advances to a later message',async t=>{
  const{db,env,sent}=await setup(t);env.META_FETCH=async()=>{sent.push('attempt');throw new TypeError('lost connection')};await ingest(env,dm('start'));assert.equal(sent.length,1);assert.equal((await session(db)).status,'unknown');await processConversations(env);await ingest(env,dm('start'));assert.equal(sent.length,1);assert.equal((await db.prepare('SELECT status FROM automation_jobs').first()).status,'unknown');

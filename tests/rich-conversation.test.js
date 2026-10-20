@@ -53,3 +53,11 @@ test('rich limits accept their exact boundaries and reject mixed media/chips plu
 test('a signed Instagram postback HTTP callback drives the actual durable image branch',async t=>{
  const{db,env,sent}=await setup(t);await ingest(env,dm('start'));const raw=JSON.stringify(postback('http-postback','IMAGE','Foto')),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.META_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']),signature=Buffer.from(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(raw))).toString('hex');const response=await runtime.fetch(new Request('https://flownex.online/webhooks/instagram',{method:'POST',headers:{'content-type':'application/json','x-hub-signature-256':'sha256='+signature},body:raw}),env);assert.equal(response.status,200);await processPending(env);await processConversations(env);assert.equal(sent[1].message.attachment.type,'image');assert.equal((await session(db)).status,'completed');
 });
+
+test('Gilberto routes the initial DM directly, serializes consecutive DMs and keeps crisis free of sales',async t=>{
+ const {gilbertoFlow}=await import('../campaigns/gilberto-rebuild/flows.js');const f=gilbertoFlow();const {db,env,sent}=await setup(t,f.configuration.graph,'comment_any');await db.prepare('UPDATE flows SET configuration=?').bind(JSON.stringify(f.configuration)).run();
+ await enqueueWebhook(dm('guru-first','Are you a guru?'),env);await enqueueWebhook(dm('crisis-next','I want to die. Can I buy your book?'),env);
+ await processPending(env);assert.equal((await db.prepare("SELECT count(*) n FROM automation_events WHERE status='pending'").first()).n,1);await processConversations(env);assert.equal(sent.length,1);assert.match(sent[0].message.text,/not a guru/);
+ db.sqlite.exec("UPDATE automation_events SET due_at=0 WHERE status='pending'");await processPending(env);await processConversations(env);assert.equal(sent.length,2);assert.match(sent[1].message.text,/988/);assert.doesNotMatch(sent[1].message.text,/gilberto-souza.com|Discover the book/);assert.equal(sent[1].message.quick_replies,undefined);
+ await enqueueWebhook(dm('stop','STOP'),env);await processPending(env);await processConversations(env);await ingest(env,dm('after-stop','book'));assert.equal(sent.length,2);
+});

@@ -26,7 +26,7 @@ export function validateGraph(graph){
   else if(n.type==='wait_reply'){if(!Number.isSafeInteger(n.timeout_seconds)||n.timeout_seconds<60||n.timeout_seconds>259200)return invalid('invalid_graph_timeout');if(n.deadline_seconds_from_start!==undefined&&(!Number.isSafeInteger(n.deadline_seconds_from_start)||n.deadline_seconds_from_start<60||n.deadline_seconds_from_start>259200))return invalid('invalid_graph_deadline');edges=[n.on_reply,n.on_timeout,...(n.on_timeout_without_window!==undefined?[n.on_timeout_without_window]:[])];}
   else if(n.type==='condition'){if(!['contains','equals'].includes(n.operator)||!text(n.value,200))return invalid('invalid_graph_condition');edges=[n.yes,n.no];}
   else if(n.type==='switch'){
-   if(!['equals','contains'].includes(n.operator)||!Array.isArray(n.cases)||n.cases.length<2||n.cases.length>10||n.cases.some(c=>!c||!id(c.id)||!text(c.label,40)||!text(c.value,1000))||new Set(n.cases.map(c=>c.id)).size!==n.cases.length||new Set(n.cases.map(c=>c.value.normalize('NFKC').toUpperCase())).size!==n.cases.length)return invalid('invalid_graph_switch');edges=[...n.cases.map(c=>c.next),n.default];
+   if(!['equals','contains','contains_any','date_between'].includes(n.operator)||!Array.isArray(n.cases)||n.cases.length<2||n.cases.length>10||n.cases.some(c=>!c||!id(c.id)||!text(c.label,40)||!text(c.value,1000))||new Set(n.cases.map(c=>c.id)).size!==n.cases.length||new Set(n.cases.map(c=>c.value.normalize('NFKC').toUpperCase())).size!==n.cases.length)return invalid('invalid_graph_switch');if(n.operator==='date_between'&&n.cases.some(c=>!validDateRange(c.value)))return invalid('invalid_graph_switch');edges=[...n.cases.map(c=>c.next),n.default];
   }
   else if(n.type==='delay'){if(!Number.isSafeInteger(n.seconds)||n.seconds<60||n.seconds>82800)return invalid('invalid_graph_delay');edges=[n.next];}
   else if(n.type==='end')edges=[];
@@ -37,8 +37,26 @@ export function validateGraph(graph){
  const visited=new Set(),active=new Set();let cycle=false;
  function visit(key){if(active.has(key)){cycle=true;return;}if(visited.has(key))return;active.add(key);for(const edge of nodes.get(key).edges)visit(edge);active.delete(key);visited.add(key);}
  visit(graph.start);if(cycle)return invalid('graph_cycle');if(visited.size!==nodes.size)return invalid('unreachable_graph_node');
- if(nodes.get(graph.start).node.type!=='message')return invalid('graph_must_start_with_message');
+ if(!['message','condition','switch'].includes(nodes.get(graph.start).node.type))return invalid('graph_must_start_with_message');
  return{ok:true};
 }
-export function conditionMatches(node,value,replyPayload){if(typeof replyPayload==='string'&&replyPayload)return node.value===replyPayload;const normalize=x=>String(x||'').normalize('NFKC').toLocaleUpperCase();const haystack=normalize(value),needle=normalize(node.value);return node.operator==='equals'?haystack.trim()===needle.trim():haystack.includes(needle);}
-export function switchTarget(node,replyText,replyPayload){const match=node.cases.find(c=>typeof replyPayload==='string'&&replyPayload?c.value===replyPayload:conditionMatches({...c,operator:node.operator},replyText));return match?match.next:node.default;}
+// Alternative phrases are newline-separated. Unicode word boundaries prevent e.g. 'help' matching 'shelf'.
+export function phraseMatches(value,alternatives){
+ const normalize=x=>String(x||'').normalize('NFKC').toLocaleUpperCase().replace(/[’‘]/g,"'").replace(/\s+/g,' ').trim();
+ const haystack=normalize(value);
+ return String(alternatives||'').split('\n').filter(x=>x.trim()).some(phrase=>{
+  const needle=normalize(phrase);let at=haystack.indexOf(needle);
+  while(at!==-1){const before=Array.from(haystack.slice(0,at)).at(-1)||'',after=Array.from(haystack.slice(at+needle.length))[0]||'';
+   if(!/[\p{L}\p{N}_]/u.test(before)&&!/[\p{L}\p{N}_]/u.test(after))return true;
+   at=haystack.indexOf(needle,at+1);
+  }return false;
+ });
+}
+export function conditionMatches(node,value,replyPayload){if(typeof replyPayload==='string'&&replyPayload)return node.value===replyPayload;const normalize=x=>String(x||'').normalize('NFKC').toLocaleUpperCase();const haystack=normalize(value),needle=normalize(node.value);if(node.operator==='contains_any')return phraseMatches(value,node.value);return node.operator==='equals'?haystack.trim()===needle.trim():haystack.includes(needle);}
+export function validDateRange(value){
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}$/.test(value))return false;
+ const [start,end]=value.split('/');return start<=end&&[start,end].every(day=>{const parsed=Date.parse(day+'T00:00:00Z');return Number.isFinite(parsed)&&new Date(parsed).toISOString().slice(0,10)===day;});
+}
+export function switchTarget(node,replyText,replyPayload,now=Date.now()){
+ if(node.operator==='date_between'){const today=new Date(now).toISOString().slice(0,10);return node.cases.find(c=>{const [start,end]=c.value.split('/');return today>=start&&today<=end;})?.next||node.default;}
+const match=node.cases.find(c=>typeof replyPayload==='string'&&replyPayload?(node.operator==='contains_any'?c.value.split('\n').some(v=>v.trim()===replyPayload):c.value===replyPayload):conditionMatches({...c,operator:node.operator},replyText));return match?match.next:node.default;}

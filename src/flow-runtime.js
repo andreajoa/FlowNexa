@@ -9,6 +9,7 @@ export function validateFlow(trigger,scope,c){
  if(c.entry_points!==undefined&&(!Array.isArray(c.entry_points)||!c.entry_points.length||c.entry_points.length>3||c.entry_points.some(kind=>!['comment','dm','story'].includes(kind))||new Set(c.entry_points).size!==c.entry_points.length))return{ok:false,error:'invalid_entry_points'};
  if(c.entry_points!==undefined&&!c.graph)return{ok:false,error:'engagement_graph_required'};
  if(c.opt_out_keywords!==undefined&&(!Array.isArray(c.opt_out_keywords)||c.opt_out_keywords.length>10||c.opt_out_keywords.some(word=>typeof word!=='string'||!word.trim()||word.length>80)||new Set(c.opt_out_keywords.map(word=>normalize(word).trim())).size!==c.opt_out_keywords.length))return{ok:false,error:'invalid_opt_out_keywords'};
+ if(c.reply_per_message!==undefined&&(typeof c.reply_per_message!=='boolean'||c.reply_per_message&&(!c.graph||c.graph.nodes?.some(n=>['wait_reply','delay'].includes(n.type)))))return{ok:false,error:'invalid_reply_per_message'};
  if(c.graph)return validateGraph(c.graph);
  if(!Array.isArray(c.actions)||!c.actions.length||c.actions.length>5)return{ok:false,error:'actions_required'};
  const allowed=trigger.startsWith('comment')?new Set(['private_reply','public_reply']):new Set(['message']);

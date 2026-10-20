@@ -1,8 +1,11 @@
+import {accountUsable, isZernioAccount, zernioMedia} from './zernio-client.js';
 import {respond as J, sha, nowSeconds, getSessionUser, requireMembership, payload, sameOrigin} from './identity.js';
 import {validateGraph} from './conversation-graph.js';
 import {validateFlow} from './flow-runtime.js';
-import {billingAccess} from './billing.js';
-import {messagingReady} from './meta-client.js';
+import {billingAccess, ownerExempt, workspacePlan, messageUsage} from './billing.js';
+import {importInstagramGraph, setFacebookFlowEnabled} from './facebook-api.js';
+import {facebookEnabled, ensureFacebookSchema} from './facebook-schema.js';
+import {messagingReady, metaRequest} from './meta-client.js';
 
 const editors = ['owner', 'admin'];
 
@@ -146,6 +149,117 @@ export async function agentRuntimeApi(request, env) {
   });
  }
 
+ // Facebook Page flows for the token workspace: list, import an Instagram graph as a draft, publish/pause.
+ if (path.startsWith('/api/v1/agent/facebook/')) {
+  if (!facebookEnabled(env, agent.workspaceId)) return J({error: 'facebook_not_available'}, 404);
+  try {
+   await ensureFacebookSchema(env);
+   if (path === '/api/v1/agent/facebook/flows' && request.method === 'GET') {
+    if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+    const pages = (await env.DB.prepare('SELECT id, name, status, provider FROM facebook_accounts WHERE workspace_id = ?').bind(agent.workspaceId).all()).results;
+    const flows = (await env.DB.prepare('SELECT id, account_id, name, trigger_type, response_kind, enabled, version, graph FROM facebook_flows WHERE workspace_id = ? ORDER BY created_at DESC').bind(agent.workspaceId).all()).results.map(f => ({...f, enabled: Boolean(f.enabled), graph: undefined, node_count: f.graph ? JSON.parse(f.graph).nodes.length : 0}));
+    return J({pages, flows});
+   }
+   if (path === '/api/v1/agent/facebook/import' && request.method === 'POST') {
+    if (!agent.scopes.includes('flows:write') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+    if (!await billingAccess(env, agent.workspaceId)) return J({error: 'billing_subscription_required'}, 402);
+    return J({flow: await importInstagramGraph(env, agent.workspaceId, await payload(request, 8000))});
+   }
+   const publish = path.match(/^\/api\/v1\/agent\/facebook\/flows\/([^/]+)\/publish$/);
+   if (publish && request.method === 'POST') {
+    if (!agent.scopes.includes('flows:publish') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+    const b = await payload(request, 2000);
+    if (b.enabled && !await billingAccess(env, agent.workspaceId)) return J({error: 'billing_subscription_required'}, 402);
+    return J({flow: await setFacebookFlowEnabled(env, agent.workspaceId, publish[1], b.enabled === true)});
+   }
+  } catch (e) { return J({error: e.status ? e.message : 'facebook_request_failed'}, e.status || 502); }
+  return J({error: 'not_found'}, 404);
+ }
+
+ // Read-only Instagram content for the token workspace: profile, recent posts and a post's comments.
+ if (path.startsWith('/api/v1/agent/instagram/') && request.method === 'GET') {
+  if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const accounts = (await env.DB.prepare("SELECT * FROM instagram_accounts WHERE workspace_id = ? AND status = 'connected' ORDER BY created_at").bind(agent.workspaceId).all()).results;
+  const wanted = url.searchParams.get('account');
+  const account = accounts.find(a => !wanted || a.username === wanted.replace(/^@/, '')) || null;
+  if (!account) return J({error: 'instagram_account_not_found', accounts: accounts.map(a => a.username)}, 404);
+  try {
+   if (path === '/api/v1/agent/instagram/profile') {
+    if (isZernioAccount(account)) return J({username: account.username, provider: 'zernio', note: 'Profile fields are available for accounts connected directly through Meta.'});
+    return J({provider: 'meta', ...(await metaRequest(env, account, 'me?fields=user_id,username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url'))});
+   }
+   if (path === '/api/v1/agent/instagram/media') {
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 25, 1), 100);
+    if (isZernioAccount(account)) return J({username: account.username, media: (await zernioMedia(env, account)).slice(0, limit)});
+    const data = await metaRequest(env, account, `${account.ig_user_id}/media?fields=id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count&limit=${limit}`);
+    return J({username: account.username, media: Array.isArray(data.data) ? data.data : []});
+   }
+   if (path === '/api/v1/agent/instagram/comments') {
+    const media = url.searchParams.get('media_id');
+    if (!/^\d{1,40}$/.test(media || '')) return J({error: 'media_id_required'}, 400);
+    if (isZernioAccount(account)) return J({error: 'comments_available_for_meta_accounts'}, 409);
+    const data = await metaRequest(env, account, `${media}/comments?fields=id,text,username,timestamp,like_count&limit=50`);
+    return J({media_id: media, comments: Array.isArray(data.data) ? data.data : []});
+   }
+  } catch (e) { return J({error: e.message || 'instagram_request_failed'}, 502); }
+  return J({error: 'not_found'}, 404);
+ }
+
+ // Read-only reporting for owners' agents: accounts, plan access, volume and outcomes.
+ if (path === '/api/v1/agent/overview' && request.method === 'GET') {
+  if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const ws = agent.workspaceId, now = Date.now(), day = 86400000;
+  const since = days => [now - days * day, Math.floor((now - days * day) / 1000)];
+  const safe = async (query, ...binds) => { try { return (await env.DB.prepare(query).bind(...binds).all()).results; } catch { return []; } };
+  const workspace = await env.DB.prepare('SELECT id, name, created_at FROM workspaces WHERE id = ?').bind(ws).first();
+  const instagram = await safe('SELECT id, username, status, token_expires_at, created_at FROM instagram_accounts WHERE workspace_id = ? ORDER BY created_at', ws);
+  const facebook = await safe('SELECT id, name, status, created_at FROM facebook_accounts WHERE workspace_id = ? ORDER BY created_at', ws);
+  const flows = await safe('SELECT enabled, count(*) AS total FROM flows WHERE workspace_id = ? GROUP BY enabled', ws);
+  const window = async days => {
+   const [ms, sec] = since(days);
+   const jobs = await safe('SELECT status, error, count(*) AS total FROM automation_jobs WHERE workspace_id = ? AND COALESCE(completed_at, attempt_at, 0) >= CASE WHEN COALESCE(completed_at, attempt_at, 0) > 100000000000 THEN ? ELSE ? END GROUP BY status, error ORDER BY total DESC', ws, ms, sec);
+   const events = await safe('SELECT status, count(*) AS total FROM automation_events WHERE workspace_id = ? AND received_at >= CASE WHEN received_at > 100000000000 THEN ? ELSE ? END GROUP BY status', ws, ms, sec);
+   const conversations = await safe('SELECT status, count(*) AS total FROM conversation_sessions WHERE workspace_id = ? AND created_at >= CASE WHEN created_at > 100000000000 THEN ? ELSE ? END GROUP BY status', ws, ms, sec);
+   return {events_received: events, messages: jobs, conversations};
+  };
+  const plan = await workspacePlan(env, ws);
+  let usage = null; try { usage = await messageUsage(env, ws); } catch {}
+  return J({
+   workspace,
+   accounts: {instagram, facebook},
+   flows: {published: flows.find(f => f.enabled)?.total || 0, drafts: flows.find(f => !f.enabled)?.total || 0},
+   access: {active: await billingAccess(env, ws), owner: await ownerExempt(env, ws), plan: plan ? {id: plan.id, accounts: plan.accounts, messages: plan.messages} : null, messaging_ready: messagingReady(env)},
+   usage_this_month: usage,
+   last_7_days: await window(7),
+   last_30_days: await window(30)
+  });
+ }
+
+ if (path === '/api/v1/agent/activity' && request.method === 'GET') {
+  if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200), status = url.searchParams.get('status');
+  const filter = status && /^[a-z_]{1,30}$/.test(status) ? ' AND j.status = ?' : '';
+  const binds = [agent.workspaceId, ...(filter ? [status] : []), limit];
+  const rows = await env.DB.prepare('SELECT j.id, j.flow_id, f.name AS flow_name, j.flow_version, j.action_type, j.status, j.error, j.provider_id, j.attempt_at, j.completed_at, a.username AS account FROM automation_jobs j JOIN flows f ON f.id = j.flow_id LEFT JOIN instagram_accounts a ON a.id = j.account_id WHERE j.workspace_id = ?' + filter + ' ORDER BY j.rowid DESC LIMIT ?').bind(...binds).all();
+  return J({activity: rows.results});
+ }
+
+ // Creates a draft flow (same validation as the panel); publishing stays a separate, explicit step.
+ if (path === '/api/v1/agent/flows' && request.method === 'POST') {
+  if (!agent.scopes.includes('flows:write') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
+  const b = await payload(request, 64000);
+  const accounts = (await env.DB.prepare("SELECT id, username FROM instagram_accounts WHERE workspace_id = ? AND status = 'connected' ORDER BY created_at").bind(agent.workspaceId).all()).results;
+  const account = accounts.find(a => !b.account || a.username === String(b.account).replace(/^@/, ''));
+  if (!account) return J({error: 'instagram_account_not_found', accounts: accounts.map(a => a.username)}, 404);
+  const scope = b.scope || 'all';
+  const valid = validateFlow(b.trigger_type, scope, b.configuration);
+  if (!valid.ok) return J({error: valid.error}, 400);
+  if (typeof b.name !== 'string' || !b.name.trim() || b.name.length > 100) return J({error: 'invalid_name'}, 400);
+  const id = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO flows(id,workspace_id,account_id,name,trigger_type,scope,configuration) VALUES (?,?,?,?,?,?,?)').bind(id, agent.workspaceId, account.id, b.name.trim(), b.trigger_type, scope, JSON.stringify(b.configuration)).run();
+  return J({flow: {id, name: b.name.trim(), trigger_type: b.trigger_type, account: account.username, enabled: false}}, 201);
+ }
+
  if (path === '/api/v1/agent/flows' && request.method === 'GET') {
   if (!agent.scopes.includes('flows:read') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
   const rows = await env.DB.prepare(
@@ -261,9 +375,10 @@ export async function agentRuntimeApi(request, env) {
    const account = await env.DB.prepare(
     'SELECT * FROM instagram_accounts WHERE id = ?'
    ).bind(flow.account_id).first();
-   if (!account || account.status !== 'connected' || account.token_expires_at < Date.now() / 1000) {
+   if (!accountUsable(account)) {
     return J({error: 'account_reconnect_required'}, 409);
    }
+   if (!messagingReady(env, account)) return J({error: 'messaging_not_configured'}, 503);
    let config = {};
    try { config = JSON.parse(flow.configuration); } catch {}
    const valid = validateFlow(flow.trigger_type, flow.scope, config);
