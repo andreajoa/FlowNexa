@@ -1,0 +1,3 @@
+PASS: rendered HTML outside stylesheet is byte-for-byte identical to HEAD.
+PASS: only tracked file changed is src/app-ui.js.
+PASS: landing, public assets, app-client, backend, routes and integrations unchanged.

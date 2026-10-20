@@ -1,0 +1,829 @@
+
+> test
+> node --test
+
+TAP version 13
+# {"service":"flownexa-runner","event":"tick_completed","processed":3,"sent":2}
+# Subtest: scheduled runner posts only to the fixed Vercel endpoint with authorization
+ok 1 - scheduled runner posts only to the fixed Vercel endpoint with authorization
+  ---
+  duration_ms: 558.461124
+  type: 'test'
+  ...
+# Subtest: runner fails visibly for rejected requests and never follows redirects
+ok 2 - runner fails visibly for rejected requests and never follows redirects
+  ---
+  duration_ms: 1.77532
+  type: 'test'
+  ...
+# Subtest: missing secret cannot trigger a request and public HTTP cannot run jobs
+ok 3 - missing secret cannot trigger a request and public HTTP cannot run jobs
+  ---
+  duration_ms: 4.088076
+  type: 'test'
+  ...
+# Subtest: all five bundled translations cover every outbound node and obey provider text limits
+ok 4 - all five bundled translations cover every outbound node and obey provider text limits
+  ---
+  duration_ms: 8.978999
+  type: 'test'
+  ...
+# Subtest: each supported campaign locale has a six-page guide and three localized images
+ok 5 - each supported campaign locale has a six-page guide and three localized images
+  ---
+  duration_ms: 2.01802
+  type: 'test'
+  ...
+# Subtest: campaign preserves opening, fits supported finite graph and uses public existing honest assets
+ok 6 - campaign preserves opening, fits supported finite graph and uses public existing honest assets
+  ---
+  duration_ms: 167.491571
+  type: 'test'
+  ...
+# Subtest: campaign bounded original wait has one legal reminder and 72h absolute cutoff with direct no-window fallback
+ok 7 - campaign bounded original wait has one legal reminder and 72h absolute cutoff with direct no-window fallback
+  ---
+  duration_ms: 0.72284
+  type: 'test'
+  ...
+# Subtest: combined campaign catches supported events, blocks optout and conflicts with any other supported active flow
+ok 8 - combined campaign catches supported events, blocks optout and conflicts with any other supported active flow
+  ---
+  duration_ms: 94.078782
+  type: 'test'
+  ...
+# (node:77779) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Agent Token lifecycle: create, list, authenticate, and revoke
+ok 9 - Agent Token lifecycle: create, list, authenticate, and revoke
+  ---
+  duration_ms: 479.857166
+  type: 'test'
+  ...
+# Subtest: Agent Graph Operations: get, validate, update, and publish with DAG safety
+ok 10 - Agent Graph Operations: get, validate, update, and publish with DAG safety
+  ---
+  duration_ms: 175.649683
+  type: 'test'
+  ...
+# Subtest: MCP Protocol Handler: tools/list and tools/call integration
+ok 11 - MCP Protocol Handler: tools/list and tools/call integration
+  ---
+  duration_ms: 6.687635
+  type: 'test'
+  ...
+# Subtest: FlowNexaMcpClient roundtrip: list, get, and update graph via MCP tools
+ok 12 - FlowNexaMcpClient roundtrip: list, get, and update graph via MCP tools
+  ---
+  duration_ms: 147.659902
+  type: 'test'
+  ...
+# Subtest: ready conversation uses supported persistent graph, independent replies and finite branching
+ok 13 - ready conversation uses supported persistent graph, independent replies and finite branching
+  ---
+  duration_ms: 25.643642
+  type: 'test'
+  ...
+# Subtest: path preview stops at waiting when no reply or elapsed-time selection is supplied
+ok 14 - path preview stops at waiting when no reply or elapsed-time selection is supplied
+  ---
+  duration_ms: 0.563527
+  type: 'test'
+  ...
+# Subtest: exact-response condition preview matches engine whitespace/case semantics and reports invalid links
+ok 15 - exact-response condition preview matches engine whitespace/case semantics and reports invalid links
+  ---
+  duration_ms: 0.548563
+  type: 'test'
+  ...
+# Subtest: graph publication guard blocks broad/overlapping existing flows without blocking distinct scopes or keywords
+ok 16 - graph publication guard blocks broad/overlapping existing flows without blocking distinct scopes or keywords
+  ---
+  duration_ms: 5.14552
+  type: 'test'
+  ...
+# Subtest: all seven node presets validate, personalize safely and keep catalog independent
+ok 17 - all seven node presets validate, personalize safely and keep catalog independent
+  ---
+  duration_ms: 5.18262
+  type: 'test'
+  ...
+# Subtest: every ready template produces supported matching flow and optional public reply only for comments
+ok 18 - every ready template produces supported matching flow and optional public reply only for comments
+  ---
+  duration_ms: 18.384126
+  type: 'test'
+  ...
+# Subtest: templates require configured details and refuse unsafe or missing destination URLs
+ok 19 - templates require configured details and refuse unsafe or missing destination URLs
+  ---
+  duration_ms: 1.290867
+  type: 'test'
+  ...
+# Subtest: preparing multiple drafts does not mutate the reusable model
+ok 20 - preparing multiple drafts does not mutate the reusable model
+  ---
+  duration_ms: 0.394236
+  type: 'test'
+  ...
+# Subtest: atenza funnel is a valid comment_any graph that keeps the current trigger and sells Atenza only
+ok 21 - atenza funnel is a valid comment_any graph that keeps the current trigger and sells Atenza only
+  ---
+  duration_ms: 15.858903
+  type: 'test'
+  ...
+# Subtest: atenza funnel uses only public Atenza links and bundled PNG assets
+ok 22 - atenza funnel uses only public Atenza links and bundled PNG assets
+  ---
+  duration_ms: 21.171203
+  type: 'test'
+  ...
+# Subtest: atenza funnel states the published prices and trial terms without invented promises
+ok 23 - atenza funnel states the published prices and trial terms without invented promises
+  ---
+  duration_ms: 0.860873
+  type: 'test'
+  ...
+# Subtest: atenza funnel follow-ups stay inside the 24h window and end silently otherwise
+ok 24 - atenza funnel follow-ups stay inside the 24h window and end silently otherwise
+  ---
+  duration_ms: 2.743537
+  type: 'test'
+  ...
+# Subtest: atenza funnel starts on any comment and respects opt-out
+ok 25 - atenza funnel starts on any comment and respects opt-out
+  ---
+  duration_ms: 4.223964
+  type: 'test'
+  ...
+# (node:77785) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: unconfigured billing fails closed without fabricated plans or provider calls
+ok 26 - unconfigured billing fails closed without fabricated plans or provider calls
+  ---
+  duration_ms: 449.297078
+  type: 'test'
+  ...
+# Subtest: embedded checkout uses approved recurring price, trusted amounts and durable resume idempotency
+ok 27 - embedded checkout uses approved recurring price, trusted amounts and durable resume idempotency
+  ---
+  duration_ms: 257.743046
+  type: 'test'
+  ...
+# Subtest: viewer, unrelated workspace, forged origin and nonallowlisted price cannot create checkout
+ok 28 - viewer, unrelated workspace, forged origin and nonallowlisted price cannot create checkout
+  ---
+  duration_ms: 70.690777
+  type: 'test'
+  ...
+# Subtest: portal uses workspace customer and server return URL, never browser customer
+ok 29 - portal uses workspace customer and server return URL, never browser customer
+  ---
+  duration_ms: 167.470755
+  type: 'test'
+  ...
+# Subtest: status lists only verified Stripe prices and webhook-authoritative entitlements
+ok 30 - status lists only verified Stripe prices and webhook-authoritative entitlements
+  ---
+  duration_ms: 14.951586
+  type: 'test'
+  ...
+# Subtest: webhook rejects forgery, old/future signatures and wrong mode before changing state
+ok 31 - webhook rejects forgery, old/future signatures and wrong mode before changing state
+  ---
+  duration_ms: 174.112167
+  type: 'test'
+  ...
+# Subtest: verified webhook deduplicates event IDs and retrieves canonical subscription rather than trusting success/event status
+ok 32 - verified webhook deduplicates event IDs and retrieves canonical subscription rather than trusting success/event status
+  ---
+  duration_ms: 58.112299
+  type: 'test'
+  ...
+# Subtest: out-of-order historical event cannot restore canceled canonical subscription
+ok 33 - out-of-order historical event cannot restore canceled canonical subscription
+  ---
+  duration_ms: 16.497861
+  type: 'test'
+  ...
+# Subtest: old canceled subscription cannot replace a different currently active subscription
+ok 34 - old canceled subscription cannot replace a different currently active subscription
+  ---
+  duration_ms: 14.722573
+  type: 'test'
+  ...
+# Subtest: provider failure remains retryable; forged customer mapping cannot mutate tenant
+ok 35 - provider failure remains retryable; forged customer mapping cannot mutate tenant
+  ---
+  duration_ms: 196.258725
+  type: 'test'
+  ...
+# Subtest: checkout retry after uncertain API response reuses persisted idempotency key
+ok 36 - checkout retry after uncertain API response reuses persisted idempotency key
+  ---
+  duration_ms: 40.943377
+  type: 'test'
+  ...
+# Subtest: client-selected plan ID and Stripe one-time prices are rejected
+ok 37 - client-selected plan ID and Stripe one-time prices are rejected
+  ---
+  duration_ms: 163.691285
+  type: 'test'
+  ...
+# Subtest: canceled subscription permits a fresh embedded checkout after its original session completed
+ok 38 - canceled subscription permits a fresh embedded checkout after its original session completed
+  ---
+  duration_ms: 23.115485
+  type: 'test'
+  ...
+# Subtest: optional billing enforcement requires an approved current active/trialing subscription
+ok 39 - optional billing enforcement requires an approved current active/trialing subscription
+  ---
+  duration_ms: 40.881484
+  type: 'test'
+  ...
+# Subtest: unknown customer cannot associate a workspace through forged metadata
+ok 40 - unknown customer cannot associate a workspace through forged metadata
+  ---
+  duration_ms: 9.708462
+  type: 'test'
+  ...
+# Subtest: signed webhook survives Vercel raw-body gateway and D1 REST boundary
+ok 41 - signed webhook survives Vercel raw-body gateway and D1 REST boundary
+  ---
+  duration_ms: 497.380405
+  type: 'test'
+  ...
+# (node:77786) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: graph validation rejects cycles, dangling edges, unreachable nodes and oversized waits
+ok 42 - graph validation rejects cycles, dangling edges, unreachable nodes and oversized waits
+  ---
+  duration_ms: 72.104619
+  type: 'test'
+  ...
+# Subtest: actual queued inbound DM asks a question, waits durably and branches on the next normalized user reply
+ok 43 - actual queued inbound DM asks a question, waits durably and branches on the next normalized user reply
+  ---
+  duration_ms: 774.589279
+  type: 'test'
+  ...
+# Subtest: condition no branch and timer followup are real sends within an existing user window
+ok 44 - condition no branch and timer followup are real sends within an existing user window
+  ---
+  duration_ms: 229.801298
+  type: 'test'
+  ...
+# Subtest: comment first private reply never opens followup permission without a real user DM
+ok 45 - comment first private reply never opens followup permission without a real user DM
+  ---
+  duration_ms: 44.36644
+  type: 'test'
+  ...
+# Subtest: comment conversation resumes with user DM and uses recipient ID for subsequent message
+ok 46 - comment conversation resumes with user DM and uses recipient ID for subsequent message
+  ---
+  duration_ms: 218.342544
+  type: 'test'
+  ...
+# Subtest: delay is durable and cannot send outside the last genuine inbound 24-hour window
+ok 47 - delay is durable and cannot send outside the last genuine inbound 24-hour window
+  ---
+  duration_ms: 25.47417
+  type: 'test'
+  ...
+# Subtest: pause, version change, disconnect and billing enforcement cancel durable conversations
+ok 48 - pause, version change, disconnect and billing enforcement cancel durable conversations
+  ---
+  duration_ms: 566.076534
+  type: 'test'
+  ...
+# Subtest: uncertain message result is never retried and never advances to a later message
+ok 49 - uncertain message result is never retried and never advances to a later message
+  ---
+  duration_ms: 167.757632
+  type: 'test'
+  ...
+# Subtest: accepted job survives cursor interruption without duplicating the provider effect
+ok 50 - accepted job survives cursor interruption without duplicating the provider effect
+  ---
+  duration_ms: 31.101111
+  type: 'test'
+  ...
+# Subtest: overlapping consumers and replayed inbound events cannot send or branch twice
+ok 51 - overlapping consumers and replayed inbound events cannot send or branch twice
+  ---
+  duration_ms: 356.53751
+  type: 'test'
+  ...
+# Subtest: old delayed inbound does not answer a later question and original event retries do not resume its own wait
+ok 52 - old delayed inbound does not answer a later question and original event retries do not resume its own wait
+  ---
+  duration_ms: 229.994365
+  type: 'test'
+  ...
+# Subtest: signed Instagram HTTP webhook drives the full queued multi-turn conversation; forged HMAC never enters it
+ok 53 - signed Instagram HTTP webhook drives the full queued multi-turn conversation; forged HMAC never enters it
+  ---
+  duration_ms: 58.907755
+  type: 'test'
+  ...
+# Subtest: a delayed older DM cannot answer a second wait or reuse its previous reply
+ok 54 - a delayed older DM cannot answer a second wait or reuse its previous reply
+  ---
+  duration_ms: 236.566623
+  type: 'test'
+  ...
+# Subtest: two replies in one pending batch cannot overwrite the answer already bound to its condition
+ok 55 - two replies in one pending batch cannot overwrite the answer already bound to its condition
+  ---
+  duration_ms: 274.177692
+  type: 'test'
+  ...
+# Subtest: reply received after provider acceptance survives an interrupted graph cursor advance
+ok 56 - reply received after provider acceptance survives an interrupted graph cursor advance
+  ---
+  duration_ms: 82.302807
+  type: 'test'
+  ...
+# Subtest: one absolute Meta deadline prevents POST when the private-comment GET exhausts its budget
+ok 57 - one absolute Meta deadline prevents POST when the private-comment GET exhausts its budget
+  ---
+  duration_ms: 139.433768
+  type: 'test'
+  ...
+# Subtest: an exhausted execution deadline defers before any Meta request instead of classifying an unsent message as unknown
+ok 58 - an exhausted execution deadline defers before any Meta request instead of classifying an unsent message as unknown
+  ---
+  duration_ms: 46.923141
+  type: 'test'
+  ...
+# Subtest: keywords case/accent normalization
+ok 59 - keywords case/accent normalization
+  ---
+  duration_ms: 2.443449
+  type: 'test'
+  ...
+# Subtest: selective media and all
+ok 60 - selective media and all
+  ---
+  duration_ms: 0.378722
+  type: 'test'
+  ...
+# Subtest: flow preview never sends
+ok 61 - flow preview never sends
+  ---
+  duration_ms: 0.41023
+  type: 'test'
+  ...
+# Subtest: HMAC signature validation
+ok 62 - HMAC signature validation
+  ---
+  duration_ms: 174.379255
+  type: 'test'
+  ...
+# (node:77811) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: engagement entry points match only supported inbound families without changing the database enum
+ok 63 - engagement entry points match only supported inbound families without changing the database enum
+  ---
+  duration_ms: 35.399198
+  type: 'test'
+  ...
+# Subtest: 72-hour wait and optional no-window edge are bounded and validated
+ok 64 - 72-hour wait and optional no-window edge are bounded and validated
+  ---
+  duration_ms: 0.615451
+  type: 'test'
+  ...
+# Subtest: exact normalized opt-out keywords reject new starts without matching substrings
+ok 65 - exact normalized opt-out keywords reject new starts without matching substrings
+  ---
+  duration_ms: 5.257689
+  type: 'test'
+  ...
+# Subtest: comment welcome waits a full 72 hours with no forbidden reminder outside a genuine DM window
+ok 66 - comment welcome waits a full 72 hours with no forbidden reminder outside a genuine DM window
+  ---
+  duration_ms: 1172.766027
+  type: 'test'
+  ...
+# Subtest: DM welcome sends just one authorized reminder then stops after the remaining wait
+ok 67 - DM welcome sends just one authorized reminder then stops after the remaining wait
+  ---
+  duration_ms: 59.473309
+  type: 'test'
+  ...
+# Subtest: a fresh genuine DM during the long comment wait reopens its normal 24-hour reply window
+ok 68 - a fresh genuine DM during the long comment wait reopens its normal 24-hour reply window
+  ---
+  duration_ms: 147.327668
+  type: 'test'
+  ...
+# Subtest: active opt-out cancels pending sends and persistently blocks the same flow on later engagement
+ok 69 - active opt-out cancels pending sends and persistently blocks the same flow on later engagement
+  ---
+  duration_ms: 224.920199
+  type: 'test'
+  ...
+# Subtest: comment opt-out cancels its wait without creating any DM permission
+ok 70 - comment opt-out cancels its wait without creating any DM permission
+  ---
+  duration_ms: 191.386399
+  type: 'test'
+  ...
+# Subtest: unsupported reaction/follow/like updates never manufacture an engagement event
+ok 71 - unsupported reaction/follow/like updates never manufacture an engagement event
+  ---
+  duration_ms: 0.632593
+  type: 'test'
+  ...
+# Subtest: engagement metadata refuses legacy action configurations that cannot adapt comment and DM delivery
+ok 72 - engagement metadata refuses legacy action configurations that cannot adapt comment and DM delivery
+  ---
+  duration_ms: 0.442038
+  type: 'test'
+  ...
+# Subtest: only an authenticated signed Instagram opt-out callback cancels the live durable wait
+ok 73 - only an authenticated signed Instagram opt-out callback cancels the live durable wait
+  ---
+  duration_ms: 177.79003
+  type: 'test'
+  ...
+# Subtest: absolute 72-hour deadline prevents delayed schedulers from extending the initial funnel
+ok 74 - absolute 72-hour deadline prevents delayed schedulers from extending the initial funnel
+  ---
+  duration_ms: 131.636546
+  type: 'test'
+  ...
+# Subtest: absolute wait deadlines are validated and a scheduler past the full deadline sends no reminder
+ok 75 - absolute wait deadlines are validated and a scheduler past the full deadline sends no reminder
+  ---
+  duration_ms: 110.709609
+  type: 'test'
+  ...
+# (node:77812) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: registration remains unverified; email is branded, token hashed, confirmation is single use and creates secure session
+ok 76 - registration remains unverified; email is branded, token hashed, confirmation is single use and creates secure session
+  ---
+  duration_ms: 10408.447295
+  type: 'test'
+  ...
+# Subtest: password reset is single use, revokes every session and rejects expired token
+ok 77 - password reset is single use, revokes every session and rejects expired token
+  ---
+  duration_ms: 9871.267463
+  type: 'test'
+  ...
+# Subtest: DB-backed throttle persists across invocations and origin checks reject cross-site writes
+ok 78 - DB-backed throttle persists across invocations and origin checks reject cross-site writes
+  ---
+  duration_ms: 19272.52822
+  type: 'test'
+  ...
+# Subtest: streamed oversized body is rejected even without content-length
+ok 79 - streamed oversized body is rejected even without content-length
+  ---
+  duration_ms: 10.16104
+  type: 'test'
+  ...
+# Subtest: memberships isolate workspaces and enforce roles; logout revokes current session
+ok 80 - memberships isolate workspaces and enforce roles; logout revokes current session
+  ---
+  duration_ms: 3096.618978
+  type: 'test'
+  ...
+# Subtest: unknown and existing addresses have generic recovery and registration responses
+ok 81 - unknown and existing addresses have generic recovery and registration responses
+  ---
+  duration_ms: 2718.895384
+  type: 'test'
+  ...
+# Subtest: provider failure never issues a session or marks email verified and can be recovered via resend
+ok 82 - provider failure never issues a session or marks email verified and can be recovered via resend
+  ---
+  duration_ms: 3348.027957
+  type: 'test'
+  ...
+# Subtest: expired verification links and replayed sibling links cannot authenticate
+ok 83 - expired verification links and replayed sibling links cannot authenticate
+  ---
+  duration_ms: 1868.827208
+  type: 'test'
+  ...
+# Subtest: transactional messages support all six launch languages and never inject a supplied locale
+ok 84 - transactional messages support all six launch languages and never inject a supplied locale
+  ---
+  duration_ms: 1.039093
+  type: 'test'
+  ...
+# Subtest: password hashes use versioned 600000 work factor and reject a wrong password
+ok 85 - password hashes use versioned 600000 work factor and reject a wrong password
+  ---
+  duration_ms: 7618.93087
+  type: 'test'
+  ...
+# Subtest: legacy 100000 versioned and 210000 unversioned hashes remain verifiable
+ok 86 - legacy 100000 versioned and 210000 unversioned hashes remain verifiable
+  ---
+  duration_ms: 4734.307516
+  type: 'test'
+  ...
+# (node:77840) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: refresh uses official endpoint, rotates encrypted token and respects two-account bound
+ok 87 - refresh uses official endpoint, rotates encrypted token and respects two-account bound
+  ---
+  duration_ms: 343.987638
+  type: 'test'
+  ...
+# Subtest: transient and malformed refresh responses preserve existing account token and flows
+ok 88 - transient and malformed refresh responses preserve existing account token and flows
+  ---
+  duration_ms: 18.910212
+  type: 'test'
+  ...
+# Subtest: code190 and already expired credentials require reconnect and pause flows
+ok 89 - code190 and already expired credentials require reconnect and pause flows
+  ---
+  duration_ms: 16.069395
+  type: 'test'
+  ...
+# Subtest: verified deauthorization clears only matching account and idempotently pauses its flows
+ok 90 - verified deauthorization clears only matching account and idempotently pauses its flows
+  ---
+  duration_ms: 321.654339
+  type: 'test'
+  ...
+# Subtest: invalid signature, tampered payload, invalid algorithm, user and methods fail closed
+ok 91 - invalid signature, tampered payload, invalid algorithm, user and methods fail closed
+  ---
+  duration_ms: 99.757213
+  type: 'test'
+  ...
+# Subtest: oversized streamed deauthorization body rejected without content-length
+ok 92 - oversized streamed deauthorization body rejected without content-length
+  ---
+  duration_ms: 16.796525
+  type: 'test'
+  ...
+# Subtest: refresh finishing after deauthorization never resurrects revoked credentials
+ok 93 - refresh finishing after deauthorization never resurrects revoked credentials
+  ---
+  duration_ms: 107.89203
+  type: 'test'
+  ...
+# Subtest: deauthorization transaction failure rolls back flow and account updates
+ok 94 - deauthorization transaction failure rolls back flow and account updates
+  ---
+  duration_ms: 68.933865
+  type: 'test'
+  ...
+# (node:77841) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: rich graph validates safe URLs, bounded quick replies/buttons and exact reachable switch branches
+ok 95 - rich graph validates safe URLs, bounded quick replies/buttons and exact reachable switch branches
+  ---
+  duration_ms: 60.314046
+  type: 'test'
+  ...
+# Subtest: quick reply payload routes an actual queued conversation to video then a separate button template
+ok 96 - quick reply payload routes an actual queued conversation to video then a separate button template
+  ---
+  duration_ms: 566.299545
+  type: 'test'
+  ...
+# Subtest: postback without a message object resumes the same conversation and image branch is a real attachment
+ok 97 - postback without a message object resumes the same conversation and image branch is a real attachment
+  ---
+  duration_ms: 233.703012
+  type: 'test'
+  ...
+# Subtest: payload routing is exact and unrecognized payload never matches a display label or contains rule
+ok 98 - payload routing is exact and unrecognized payload never matches a display label or contains rule
+  ---
+  duration_ms: 0.662258
+  type: 'test'
+  ...
+# Subtest: own postbacks, malformed quick replies and URL-click notifications do not count as inbound replies
+ok 99 - own postbacks, malformed quick replies and URL-click notifications do not count as inbound replies
+  ---
+  duration_ms: 0.454634
+  type: 'test'
+  ...
+# Subtest: repeated distinct button taps retain individual provider IDs; retries have stable fallback identity
+ok 100 - repeated distinct button taps retain individual provider IDs; retries have stable fallback identity
+  ---
+  duration_ms: 0.77954
+  type: 'test'
+  ...
+# Subtest: postback payload stays frozen when a second typed reply refreshes the window before the switch executes
+ok 101 - postback payload stays frozen when a second typed reply refreshes the window before the switch executes
+  ---
+  duration_ms: 212.614654
+  type: 'test'
+  ...
+# Subtest: first private comment reply strips chips and no media or button follows without an actual inbound DM
+ok 102 - first private comment reply strips chips and no media or button follows without an actual inbound DM
+  ---
+  duration_ms: 148.093475
+  type: 'test'
+  ...
+# Subtest: rich sends enforce the same 24-hour window, pause gates and unknown-response handling
+ok 103 - rich sends enforce the same 24-hour window, pause gates and unknown-response handling
+  ---
+  duration_ms: 45.976042
+  type: 'test'
+  ...
+# Subtest: uncertain media POST is never repeated and its subsequent button message is never sent
+ok 104 - uncertain media POST is never repeated and its subsequent button message is never sent
+  ---
+  duration_ms: 205.474378
+  type: 'test'
+  ...
+# Subtest: accepted cursor recovery uses the original quick reply payload rather than a newer typed label
+ok 105 - accepted cursor recovery uses the original quick reply payload rather than a newer typed label
+  ---
+  duration_ms: 245.756959
+  type: 'test'
+  ...
+# Subtest: existing condition nodes use exact structured payload when present, plain text operators otherwise
+ok 106 - existing condition nodes use exact structured payload when present, plain text operators otherwise
+  ---
+  duration_ms: 0.4119
+  type: 'test'
+  ...
+# Subtest: rich limits accept their exact boundaries and reject mixed media/chips plus malformed contact flags
+ok 107 - rich limits accept their exact boundaries and reject mixed media/chips plus malformed contact flags
+  ---
+  duration_ms: 0.980451
+  type: 'test'
+  ...
+# Subtest: a signed Instagram postback HTTP callback drives the actual durable image branch
+ok 108 - a signed Instagram postback HTTP callback drives the actual durable image branch
+  ---
+  duration_ms: 265.080558
+  type: 'test'
+  ...
+# (node:77872) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: signed queue rejects forged payload and deduplicates repeated event delivery and overlapping consumers
+ok 109 - signed queue rejects forged payload and deduplicates repeated event delivery and overlapping consumers
+  ---
+  duration_ms: 671.665946
+  type: 'test'
+  ...
+# Subtest: timeout/empty successful response is unknown and never retried automatically
+ok 110 - timeout/empty successful response is unknown and never retried automatically
+  ---
+  duration_ms: 70.876468
+  type: 'test'
+  ...
+# Subtest: provider 429 recovers through a later authenticated tick without another webhook
+ok 111 - provider 429 recovers through a later authenticated tick without another webhook
+  ---
+  duration_ms: 24.075173
+  type: 'test'
+  ...
+# Subtest: pause/version change cancels a queued flow, expired DM never posts, own comment never enqueues
+ok 112 - pause/version change cancels a queued flow, expired DM never posts, own comment never enqueues
+  ---
+  duration_ms: 25.475824
+  type: 'test'
+  ...
+# Subtest: private reply deduplicates overlapping matching flows and checks actual provider comment timestamp
+ok 113 - private reply deduplicates overlapping matching flows and checks actual provider comment timestamp
+  ---
+  duration_ms: 445.240072
+  type: 'test'
+  ...
+# Subtest: tenant isolation, viewer write refusal, draft edits pause active flows and publish requires configured messaging
+ok 114 - tenant isolation, viewer write refusal, draft edits pause active flows and publish requires configured messaging
+  ---
+  duration_ms: 208.035069
+  type: 'test'
+  ...
+# Subtest: OAuth state binds initiating browser and rejects revoked membership before provider calls
+ok 115 - OAuth state binds initiating browser and rejects revoked membership before provider calls
+  ---
+  duration_ms: 21.76719
+  type: 'test'
+  ...
+# Subtest: interrupted sending reservation becomes unknown instead of sending again
+ok 116 - interrupted sending reservation becomes unknown instead of sending again
+  ---
+  duration_ms: 243.723232
+  type: 'test'
+  ...
+# Subtest: accepted provider result followed by DB write failure is unknown, never reported rejected or resent
+ok 117 - accepted provider result followed by DB write failure is unknown, never reported rejected or resent
+  ---
+  duration_ms: 83.487115
+  type: 'test'
+  ...
+# Subtest: webhook burst of 1000 updates persists every event and deduplicates a provider retry
+ok 118 - webhook burst of 1000 updates persists every event and deduplicates a provider retry
+  ---
+  duration_ms: 6100.677127
+  type: 'test'
+  ...
+# Subtest: oversized webhook batch refuses the entire batch without silently discarding events
+ok 119 - oversized webhook batch refuses the entire batch without silently discarding events
+  ---
+  duration_ms: 19.477269
+  type: 'test'
+  ...
+# Subtest: OAuth operational connection requires confirmed subscription, rejects replay and never stores raw token
+ok 120 - OAuth operational connection requires confirmed subscription, rejects replay and never stores raw token
+  ---
+  duration_ms: 242.990276
+  type: 'test'
+  ...
+# Subtest: failed or malformed Meta subscription responses never persist a newly connected account
+ok 121 - failed or malformed Meta subscription responses never persist a newly connected account
+  ---
+  duration_ms: 423.398038
+  type: 'test'
+  ...
+# Subtest: webhook requires its configured signing secret and rejects a different key, missing key and tampered bytes
+ok 122 - webhook requires its configured signing secret and rejects a different key, missing key and tampered bytes
+  ---
+  duration_ms: 14.621649
+  type: 'test'
+  ...
+# Subtest: partially persisted webhook burst can be retried without loss or duplicate events
+ok 123 - partially persisted webhook burst can be retried without loss or duplicate events
+  ---
+  duration_ms: 837.745088
+  type: 'test'
+  ...
+# Subtest: enforced subscription gates publication and cancels queued work before any provider send
+ok 124 - enforced subscription gates publication and cancels queued work before any provider send
+  ---
+  duration_ms: 68.103944
+  type: 'test'
+  ...
+# Subtest: subscription cancellation between actions prevents the next queued message
+ok 125 - subscription cancellation between actions prevents the next queued message
+  ---
+  duration_ms: 20.646461
+  type: 'test'
+  ...
+# Subtest: Instagram tokens encrypt and round-trip
+ok 126 - Instagram tokens encrypt and round-trip
+  ---
+  duration_ms: 257.799814
+  type: 'test'
+  ...
+# Subtest: different IV per encryption
+ok 127 - different IV per encryption
+  ---
+  duration_ms: 37.203344
+  type: 'test'
+  ...
+# Subtest: OAuth fails closed without configuration
+ok 128 - OAuth fails closed without configuration
+  ---
+  duration_ms: 312.246406
+  type: 'test'
+  ...
+# Subtest: webhook fails closed for invalid signatures
+ok 129 - webhook fails closed for invalid signatures
+  ---
+  duration_ms: 427.243956
+  type: 'test'
+  ...
+# Subtest: subscription confirmation follows the authenticated POST response contract
+ok 130 - subscription confirmation follows the authenticated POST response contract
+  ---
+  duration_ms: 318.344625
+  type: 'test'
+  ...
+# Subtest: failed HTTP and incomplete or malformed success values cannot confirm a subscription
+ok 131 - failed HTTP and incomplete or malformed success values cannot confirm a subscription
+  ---
+  duration_ms: 0.483431
+  type: 'test'
+  ...
+# Subtest: public website renders without Cloudflare configuration
+ok 132 - public website renders without Cloudflare configuration
+  ---
+  duration_ms: 463.697045
+  type: 'test'
+  ...
+# Subtest: marketing signup and login CTAs reach the actual application with distinct entry modes
+ok 133 - marketing signup and login CTAs reach the actual application with distinct entry modes
+  ---
+  duration_ms: 7.558785
+  type: 'test'
+  ...
+1..133
+# tests 133
+# suites 0
+# pass 133
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 69701.80452
