@@ -1,5 +1,9 @@
+import {facebookApi} from './facebook-api.js';
+import {processFacebookJobs,metaFacebookWebhook} from './facebook-runtime.js';
+import {zernioConnection} from './zernio-connection.js';
+import {zernioWebhook} from './zernio-webhook.js';
 import {processConversations} from './conversation-runtime.js';
-import {billingApi,stripeWebhook} from './billing.js';
+import {billingApi,stripeWebhook,ownerExempt} from './billing.js';
 import {refreshAccounts,deauthorize} from './account-lifecycle.js';
 import {legalPage} from './legal.js';
 import {appPage} from './app-ui.js';
@@ -11,8 +15,7 @@ import {enqueueWebhook,processPending} from './automation-engine.js';
 import {respond as json,sha} from './identity.js';
 import {messagingReady} from './meta-client.js';
 import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
-import {syncAtenzaFlow} from './presets/atenza-acquisition.js';
-import {syncAmbBoutiqueFlow} from './presets/amb-boutique-acquisition.js';
+import {mcpHttp} from './mcp-http.js';
 export const TEMPLATES=[{id:'comment-link',name:'Comentou QUERO',trigger_type:'comment_keyword',scope:'selected',configuration:{keywords:['QUERO'],actions:[{type:'private_reply',text:'Aqui está o link solicitado.'}]}}];
 export function keywordMatch(content,words){const text=String(content||'').normalize('NFKC').toLocaleUpperCase('pt-BR');return Array.isArray(words)&&words.some(w=>String(w).trim()&&text.includes(String(w).normalize('NFKC').toLocaleUpperCase('pt-BR')))}
 export function mediaMatch(scope,selected,mediaId){return scope==='all'||scope==='selected'&&Array.isArray(selected)&&selected.includes(mediaId)}
@@ -26,30 +29,29 @@ async function processQueue(env){
  return{...queue,conversations};
 }
 
-export default {async fetch(request,env,ctx={}){
+const app={async fetch(request,env,ctx={}){
  const url=new URL(request.url),path=url.pathname;
+ if(path==='/mcp')return mcpHttp(request,env,(req,e)=>app.fetch(req,e));
  const legal=legalPage(path);if(legal&&request.method==='GET')return new Response(legal,{headers:{'content-type':'text/html; charset=utf-8','x-content-type-options':'nosniff'}});
  if(request.method==='GET'&&['/app','/app/','/app.js'].includes(path)){
   const script=path==='/app.js';return new Response(script?appClient():appPage(new URL(request.url).searchParams.get('lang')==='en'?'en':'pt-BR'),{headers:{'content-type':script?'application/javascript; charset=utf-8':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; connect-src 'self' https://api.stripe.com https://r.stripe.com https://m.stripe.network https://checkout.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}});
  }
  if(path==='/api/health'&&request.method==='GET'){
   if(!env.DB)return json({status:'degraded',database:false},503);
-  let atenzaUpdated=false,ambUpdated=false;
-  try{atenzaUpdated=await syncAtenzaFlow(env.DB);}catch{}
-  try{ambUpdated=await syncAmbBoutiqueFlow(env.DB);}catch{}
-  let accounts=[];
-  try{
-   const rows=await env.DB.prepare('SELECT username, status FROM instagram_accounts').all();
-   accounts=rows.results||[];
-  }catch{}
-  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa',liveMessaging:messagingReady(env),instagramConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET&&env.META_WEBHOOK_SECRET),atenzaUpdated,ambUpdated,accounts});}catch{return json({status:'degraded',database:false},503);}
+  // Public availability checks must not expose tenants or change their automations.
+  try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa'});}catch{return json({status:'degraded',database:false},503);}
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
-  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);return json({...queue,accounts});
+  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Date.now()+8000);}catch{facebook={error:'facebook_queue_unavailable'};}return json({...queue,accounts,facebook});
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
+ if(path.startsWith('/api/facebook/'))return facebookApi(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
+ if(path==='/webhooks/zernio')return zernioWebhook(request,env);
+ if(path==='/webhooks/facebook')return metaFacebookWebhook(request,env);
+ // The owner's own workspaces connect Instagram directly through Meta (free); customers follow the provider setting.
+ if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio'&&!await ownerExempt(env,url.searchParams.get('workspace')||''))return zernioConnection(request,env);
  if(path==='/api/instagram/deauthorize')return deauthorize(request,env);
  if(path.startsWith('/api/instagram/'))return instagramOauth(request,env);
  if(path.startsWith('/api/auth/')||path==='/api/workspaces'||path==='/api/accounts')return accountApi(request,env);
@@ -67,7 +69,8 @@ export default {async fetch(request,env,ctx={}){
   if(!await verifySignature(body,request.headers.get('x-hub-signature-256'),env.META_WEBHOOK_SECRET))return json({error:'invalid_signature'},403);
   if(!env.DB||!env.TOKEN_ENCRYPTION_KEY)return json({error:'database_unavailable'},503);
   let parsed;try{parsed=JSON.parse(new TextDecoder().decode(body));}catch{return json({error:'invalid_payload'},400);}
-  try{if(env.DB)await syncAtenzaFlow(env.DB);const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processQueue(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}
+  try{const queued=await enqueueWebhook(parsed,env);if(ctx.waitUntil)ctx.waitUntil(processQueue(env).catch(()=>{}));return json({received:true,queued});}catch{return json({error:'queue_unavailable'},503);}
  }
  return json({error:'not_found'},404);
 }};
+export default app;

@@ -1,3 +1,4 @@
+import {accountUsable} from './zernio-client.js';
 import {campaignSuppressed} from './campaign-opt-out.js';
 import {isOptOut} from './flow-runtime.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
@@ -14,7 +15,7 @@ async function save(env,row,state,changes={}){
  if(!['running','waiting_reply','delayed'].includes(next.status))await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error=?,completed_at=? WHERE event_id=? AND action_index>=1000 AND status='pending'").bind(next.error||'conversation_completed',Date.now(),row.origin_event_id).run();
 }
 async function release(env,row){await env.DB.prepare('UPDATE conversation_sessions SET lease_id=NULL,lease_until=NULL WHERE id=? AND lease_id=?').bind(row.id,row.lease_id).run();}
-async function eligibility(env,row){const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(row.flow_id).first(),account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();if(await campaignSuppressed(env,row.account_id,row.flow_id,row.recipient_hash))return null;if(!flow?.enabled||flow.version!==row.flow_version||account?.status!=='connected'||account.token_expires_at<=Date.now()/1000||!await billingAccess(env,row.workspace_id))return null;return account;}
+async function eligibility(env,row){const flow=await env.DB.prepare('SELECT enabled,version FROM flows WHERE id=?').bind(row.flow_id).first(),account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();if(await campaignSuppressed(env,row.account_id,row.flow_id,row.recipient_hash))return null;if(!flow?.enabled||flow.version!==row.flow_version||!accountUsable(account)||!await billingAccess(env,row.workspace_id))return null;return account;}
 async function drive(env,row,state,deadline){
  const nodes=new Map(state.graph.nodes.map(node=>[node.id,node]));
  for(let count=0;count<35&&Date.now()<deadline;count++){
@@ -91,10 +92,10 @@ async function drive(env,row,state,deadline){
   }catch(error){
    if(error.deferred){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='processing_deferred' WHERE id=?").bind(jobId).run();await save(env,row,state,{due_at:Date.now()+2000});return;}
    if(error.retryable&&row.retry_count<5){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='meta_rate_limited' WHERE id=?").bind(jobId).run();await save(env,row,state,{retry_count:row.retry_count+1,due_at:Date.now()+Math.min(3600000,30000*2**row.retry_count)});return;}
-   const uncertain=error.message==='delivery_unknown';
-   await env.DB.prepare('UPDATE automation_jobs SET status=?,error=?,completed_at=? WHERE id=?').bind(uncertain?'unknown':'failed',uncertain?'delivery_unknown':'message_rejected',Date.now(),jobId).run();
+   const uncertain=error.message==='delivery_unknown',reason=error.message==='billing_message_limit'?'billing_message_limit':'message_rejected';
+   await env.DB.prepare('UPDATE automation_jobs SET status=?,error=?,completed_at=? WHERE id=?').bind(uncertain?'unknown':'failed',uncertain?'delivery_unknown':reason,Date.now(),jobId).run();
    if(error.message==='account_reconnect_required')await env.DB.prepare("UPDATE instagram_accounts SET status='reconnect_required' WHERE id=?").bind(row.account_id).run();
-   await save(env,row,state,{status:uncertain?'unknown':'failed',error:uncertain?'delivery_unknown':'message_rejected'});return;
+   await save(env,row,state,{status:uncertain?'unknown':'failed',error:uncertain?'delivery_unknown':reason});return;
   }
   state.sentFirst=true;state.lastOutboundAt=acceptedAt;state.lastMessageInboundAt=event.at;state.afterMessage=true;await save(env,row,state,{node_id:node.next,step_index:row.step_index+1,retry_count:0,error:null});
  }
@@ -108,8 +109,9 @@ export async function startConversation(env,account,flow,event,eventId){
  const recipient=await sha(event.sender_id);
  const priorSession=await env.DB.prepare("SELECT id,node_id,status,encrypted_state,updated_at FROM conversation_sessions WHERE account_id=? AND recipient_hash=? ORDER BY updated_at DESC LIMIT 1").bind(account.id,recipient).first();
  const isReturning=Boolean(priorSession);
- const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
+ const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,replyPerMessage:c.reply_per_message===true,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,recipient,eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
+ if(!inserted.meta.changes&&c.reply_per_message){const error=Error('conversation_busy');error.deferred=true;throw error;}
  return inserted.meta.changes?'conversation_started':'conversation_already_active';
 }
 export async function resumeConversation(env,account,event,eventId){
@@ -121,6 +123,8 @@ export async function resumeConversation(env,account,event,eventId){
   if(await env.DB.prepare('SELECT event_id FROM conversation_inbound WHERE event_id=?').bind(eventId).first())return true;
   const state=JSON.parse(await decryptToken(row.encrypted_state,env.TOKEN_ENCRYPTION_KEY));
   if(isOptOut({opt_out_keywords:state.opt_out_keywords||[]},event)){await save(env,row,state,{status:'cancelled',error:'opted_out'});await env.DB.prepare('INSERT OR IGNORE INTO conversation_inbound(event_id,conversation_id,received_at) VALUES(?,?,?)').bind(eventId,row.id,Date.now()).run();return true;}
+  // Independent replies stay durable until the prior send finishes; never swallow a second DM.
+  if(state.replyPerMessage){const error=Error('conversation_busy');error.deferred=true;throw error;}
   if(event.kind==='comment')return false;
   if(!await eligibility(env,row)){await save(env,row,state,{status:'cancelled',error:'flow_account_or_billing_changed'});return false;}
   if(event.at>Date.now()+300000||Date.now()-event.at>86400000)return true;

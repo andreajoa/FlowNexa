@@ -1,3 +1,4 @@
+import {commercialPlans,PLAN_TIERS} from './commercial-plans.js';
 import {getSessionUser,requireMembership,sameOrigin,payload,respond,nowSeconds,sha} from './identity.js';
 const API_VERSION='2026-08-26.dahlia';
 const terminal=new Set(['canceled','incomplete_expired']);
@@ -6,8 +7,9 @@ const idOf=value=>typeof value==='string'?value:value?.id;
 const error=(message,status=502)=>Object.assign(Error(message),{status});
 function config(env){
  let prices;try{prices=JSON.parse(env.STRIPE_PRICE_MAP||'{}');}catch{return null;}
- const entries=Object.entries(prices||{});
- if(!entries.length||entries.length>8||entries.some(([key,value])=>!/^[-\w]{1,40}$/.test(key)||typeof value!=='string'||!/^price_[A-Za-z0-9]+$/.test(value)))return null;
+ if(!prices||typeof prices!=='object'||Array.isArray(prices))return null;
+ const entries=Object.entries(prices);
+ if(!entries.length||entries.length>8||new Set(entries.map(([,value])=>value)).size!==entries.length||entries.some(([key,value])=>!/^[-\w]{1,40}$/.test(key)||typeof value!=='string'||!/^price_[A-Za-z0-9]+$/.test(value)))return null;
  if(!/^(?:sk|rk)_(test|live)_/.test(env.STRIPE_SECRET_KEY||'')||!/^pk_(test|live)_/.test(env.STRIPE_PUBLISHABLE_KEY||'')||!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_'))return null;
  if(env.STRIPE_SECRET_KEY.includes('_live_')!==env.STRIPE_PUBLISHABLE_KEY.includes('_live_'))return null;
  return{prices,live:env.STRIPE_SECRET_KEY.includes('_live_')};
@@ -25,8 +27,8 @@ function base(env){const url=new URL(env.PUBLIC_BASE_URL||'https://flownex.onlin
 async function rowFor(env,workspace){await env.DB.prepare('INSERT INTO workspace_billing(workspace_id,updated_at) VALUES(?,?) ON CONFLICT(workspace_id) DO NOTHING').bind(workspace,nowSeconds()).run();return env.DB.prepare('SELECT * FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();}
 async function lock(env,workspace){const id=crypto.randomUUID(),now=nowSeconds();const result=await env.DB.prepare('UPDATE workspace_billing SET lease_id=?,lease_until=? WHERE workspace_id=? AND (lease_until IS NULL OR lease_until<?)').bind(id,now+90,workspace,now).run();if(!result.meta.changes)throw error('billing_busy',409);return id;}
 async function unlock(env,workspace,lease){await env.DB.prepare('UPDATE workspace_billing SET lease_id=NULL,lease_until=NULL WHERE workspace_id=? AND lease_id=?').bind(workspace,lease).run();}
-async function price(env,id){const p=await stripe(env,'prices/'+encodeURIComponent(id)+'?expand[]=product');if(p.id!==id||p.active!==true||p.type!=='recurring'||!p.recurring||!['day','week','month','year'].includes(p.recurring.interval)||!Number.isSafeInteger(p.recurring.interval_count)||p.recurring.interval_count<=0||!Number.isSafeInteger(p.unit_amount)||p.unit_amount<=0||!/^[a-z]{3}$/.test(p.currency||''))throw error('invalid_recurring_price',503);return p;}
-function subscription(row,cfg){if(!row?.stripe_subscription_id)return null;const plan=Object.entries(cfg?.prices||{}).find(([,id])=>id===row.stripe_price_id)?.[0]||null;return{status:row.subscription_status,plan,price_id:row.stripe_price_id,current_period_end:row.current_period_end,cancel_at_period_end:Boolean(row.cancel_at_period_end),entitled:Boolean(plan&&['active','trialing'].includes(row.subscription_status))};}
+async function price(env,id){const p=await stripe(env,'prices/'+encodeURIComponent(id)+'?expand[]=product');if(p.id!==id||p.active!==true||p.type!=='recurring'||!p.recurring||!['day','week','month','year'].includes(p.recurring.interval)||!Number.isSafeInteger(p.recurring.interval_count)||p.recurring.interval_count<=0||!Number.isSafeInteger(p.unit_amount)||p.unit_amount<=0||!/^[a-z]{3}$/.test(p.currency||''))throw error('invalid_recurring_price',503);const known=commercialPlans().find(plan=>env.STRIPE_PRICE_MAP&&JSON.parse(env.STRIPE_PRICE_MAP)[plan.id]===id);if(known&&(p.currency!==known.currency||p.unit_amount!==known.unit_amount||p.recurring.interval!==known.interval||p.recurring.interval_count!==1))throw error('price_catalog_mismatch',503);return p;}
+function subscription(row,cfg){if(!row?.stripe_subscription_id)return null;const plan=Object.entries(cfg?.prices||{}).find(([,id])=>id===row.stripe_price_id)?.[0]||null;return{status:row.subscription_status,plan,price_id:row.stripe_price_id,current_period_end:row.current_period_end,cancel_at_period_end:Boolean(row.cancel_at_period_end),entitled:Boolean(plan&&['active','trialing'].includes(row.subscription_status)&&row.current_period_end>nowSeconds())};}
 export async function billingApi(request,env){
  if(!env.DB)return respond({error:'database_unavailable'},503);
  if(request.method!=='GET'&&!sameOrigin(request))return respond({error:'invalid_origin'},403);
@@ -40,8 +42,10 @@ export async function billingApi(request,env){
   const canManage=['owner','admin'].includes(member.role),cfg=config(env);
   const row=await env.DB.prepare('SELECT * FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
   if(url.pathname==='/api/billing/status'&&request.method==='GET'){
-   const plans=cfg?await Promise.all(Object.entries(cfg.prices).map(async([id,priceId])=>{const p=await price(env,priceId);return{id,name:p.nickname||(typeof p.product==='object'?p.product.name:null)||id,unit_amount:p.unit_amount,currency:p.currency,interval:p.recurring.interval,interval_count:p.recurring.interval_count};})):[];
-   return respond({configured:Boolean(cfg),can_manage:canManage,plans,subscription:subscription(row,cfg)});
+   const plans=cfg?await Promise.all(Object.entries(cfg.prices).map(async([id,priceId])=>{const p=await price(env,priceId);const definition=commercialPlans().find(plan=>plan.id===id);return{...(definition?{tier:definition.tier,accounts:definition.accounts,messages:definition.messages}:{}),id,name:definition?.name||p.nickname||(typeof p.product==='object'?p.product.name:null)||id,unit_amount:p.unit_amount,currency:p.currency,interval:p.recurring.interval,interval_count:p.recurring.interval_count};})):[];
+   const currentPlan=await workspacePlan(env,workspace);const usage=currentPlan?{...await messageUsage(env,workspace),limit:currentPlan.messages}:null;
+   const owner=await ownerExempt(env,workspace),legacy=env.BILLING_ENFORCED==='true'?await legacyBillingAccess(env,workspace):null,trial=env.BILLING_ENFORCED==='true'&&!legacy&&!owner?await trialStatus(env,workspace):null;
+   return respond({configured:Boolean(cfg),can_manage:canManage,plans,subscription:subscription(row,cfg),...(usage?{usage}:{}),...(legacy!==null?{legacy_access:legacy}:{}),...(trial?{trial}:{}),...(owner?{owner_access:true}:{})});
   }
   if(request.method!=='POST'||!['/api/billing/checkout','/api/billing/portal'].includes(url.pathname))return respond({error:'not_found'},404);
   if(!canManage)return respond({error:'forbidden'},403);
@@ -49,12 +53,13 @@ export async function billingApi(request,env){
   await rowFor(env,workspace);lease=await lock(env,workspace);let current=await env.DB.prepare('SELECT * FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
   if(url.pathname==='/api/billing/portal'){
    if(!current.stripe_customer_id)return respond({error:'billing_customer_missing'},409);
-   const portal=await stripe(env,'billing_portal/sessions',{method:'POST',params:{customer:current.stripe_customer_id,return_url:base(env)+'/app?billing=portal'}});
+   const portal=await stripe(env,'billing_portal/sessions',{method:'POST',params:{customer:current.stripe_customer_id,return_url:base(env)+'/app?billing=portal',locale:['en','pt-BR'].includes(body.locale)?body.locale:'auto',...(/^bpc_[A-Za-z0-9]+$/.test(env.STRIPE_PORTAL_CONFIGURATION||'')?{configuration:env.STRIPE_PORTAL_CONFIGURATION}:{})}});
    const location=new URL(portal.url);if(location.protocol!=='https:'||location.hostname!=='billing.stripe.com')throw error('billing_provider_unavailable');
    return respond({url:location.href});
   }
   const priceId=Object.hasOwn(cfg.prices,body.plan)?cfg.prices[body.plan]:null;if(!priceId)return respond({error:'invalid_plan'},400);
-  await price(env,priceId);
+  const selectedPrice=await price(env,priceId);
+  const locale=['pt-BR','en'].includes(body.locale)?body.locale:selectedPrice.currency==='brl'?'pt-BR':'en';
   if(current.stripe_subscription_id&&!terminal.has(current.subscription_status))return respond({error:'subscription_exists'},409);
   if(!current.stripe_customer_id){
    const owner=await env.DB.prepare('SELECT u.email FROM users u JOIN workspaces w ON w.owner_id=u.id WHERE w.id=?').bind(workspace).first();
@@ -64,7 +69,8 @@ export async function billingApi(request,env){
    await env.DB.prepare('UPDATE workspace_billing SET stripe_customer_id=?,updated_at=? WHERE workspace_id=? AND lease_id=?').bind(customer.id,nowSeconds(),workspace,lease).run();current.stripe_customer_id=customer.id;
   }
   if(current.checkout_session_id){
-   const previous=await stripe(env,'checkout/sessions/'+encodeURIComponent(current.checkout_session_id));
+   let previous=await stripe(env,'checkout/sessions/'+encodeURIComponent(current.checkout_session_id));
+   if(previous.status==='open'&&current.checkout_price_id!==priceId&&body.replace_open_checkout===true){previous=await stripe(env,'checkout/sessions/'+encodeURIComponent(current.checkout_session_id)+'/expire',{method:'POST',idempotencyKey:'flownexa-expire-'+current.checkout_session_id});if(previous.status!=='expired')throw error('subscription_sync_pending',409);}
    if(previous.status==='open'){
     if(current.checkout_price_id!==priceId)return respond({error:'checkout_in_progress'},409);
     if(typeof previous.client_secret!=='string'||!previous.client_secret)throw error('billing_provider_unavailable');
@@ -78,7 +84,7 @@ export async function billingApi(request,env){
   if(!current.checkout_request_id)await env.DB.prepare('UPDATE workspace_billing SET checkout_request_id=?,checkout_session_id=NULL,checkout_price_id=? WHERE workspace_id=? AND lease_id=?').bind(requestId,priceId,workspace,lease).run();
   else if(current.checkout_price_id!==priceId)return respond({error:'checkout_in_progress'},409);
   const suffix=requestId.replaceAll('-','').slice(0,8).split('').map(c=>String.fromCharCode(97+parseInt(c,16))).join('');
-  const session=await stripe(env,'checkout/sessions',{method:'POST',idempotencyKey:'flownexa-checkout-'+requestId,params:{mode:'subscription',ui_mode:'embedded_page',customer:current.stripe_customer_id,'line_items[0][price]':priceId,'line_items[0][quantity]':'1',client_reference_id:workspace,'metadata[workspace_id]':workspace,'subscription_data[metadata][workspace_id]':workspace,return_url:base(env)+'/app?billing=return&session_id={CHECKOUT_SESSION_ID}',redirect_on_completion:'if_required',integration_identifier:'flownexa-embedded-'+suffix}});
+  const session=await stripe(env,'checkout/sessions',{method:'POST',idempotencyKey:'flownexa-checkout-'+requestId,params:{mode:'subscription',ui_mode:'embedded_page',locale,customer:current.stripe_customer_id,'line_items[0][price]':priceId,'line_items[0][quantity]':'1',client_reference_id:workspace,'metadata[workspace_id]':workspace,'subscription_data[metadata][workspace_id]':workspace,return_url:base(env)+'/app?billing=return&session_id={CHECKOUT_SESSION_ID}',redirect_on_completion:'if_required',integration_identifier:'flownexa-embedded-'+suffix}});
   if(!/^cs_[A-Za-z0-9_]+$/.test(session.id||'')||typeof session.client_secret!=='string'||!session.client_secret)throw error('billing_provider_unavailable');
   await env.DB.prepare('UPDATE workspace_billing SET checkout_session_id=?,updated_at=? WHERE workspace_id=? AND lease_id=?').bind(session.id,nowSeconds(),workspace,lease).run();
   return respond({client_secret:session.client_secret,publishable_key:env.STRIPE_PUBLISHABLE_KEY,session_id:session.id});
@@ -135,9 +141,69 @@ export async function stripeWebhook(request,env){
  finally{if(lease)await unlock(env,workspace,lease);if(claimed)await env.DB.prepare('UPDATE stripe_webhook_events SET lease_id=NULL,lease_until=NULL WHERE id=? AND lease_id=?').bind(eventId,claimed).run();}
 }
 
-// Enforcement is opt-in until commercial and free-plan policy are approved.
+// Cutover preserves pre-launch workspaces; newly created workspaces require a subscription when enforced.
+export async function legacyBillingAccess(env,workspace){
+ const value=env.BILLING_LEGACY_BEFORE;if(!env.DB||!workspace||typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value))return false;
+ const cutoff=Date.parse(value);if(!Number.isFinite(cutoff)||cutoff>Date.now())return false;
+ const row=await env.DB.prepare('SELECT created_at FROM workspaces WHERE id=?').bind(workspace).first();
+ const timestamp=typeof row?.created_at==='string'?Date.parse(row.created_at.includes('T')?row.created_at:row.created_at.replace(' ','T')+'Z'):NaN;
+ return Number.isFinite(timestamp)&&timestamp<cutoff;
+}
+// The owner's own profiles: full access with no charge and no plan limits. Matched on an
+// Instagram username in the workspace, which only the account holder can establish via OAuth.
+const listEnv=value=>(value||'').split(',').map(v=>v.trim().replace(/^@/,'').toLowerCase()).filter(Boolean);
+export async function ownerExempt(env,workspace){
+ if(!workspace)return false;if(listEnv(env.BILLING_EXEMPT_WORKSPACES).includes(workspace.toLowerCase()))return true;
+ const names=listEnv(env.BILLING_EXEMPT_INSTAGRAM);if(!names.length||!env.DB)return false;
+ try{return Boolean(await env.DB.prepare(`SELECT 1 FROM instagram_accounts WHERE workspace_id=? AND lower(username) IN (${names.map(()=>'?').join(',')}) LIMIT 1`).bind(workspace,...names).first());}catch{return false;}
+}
+// Free trial: full access (Teams account limit, capped messages) without a card, counted
+// from the owner's signup so creating another workspace cannot restart it.
+export async function trialStatus(env,workspace){
+ const days=Number(env.BILLING_TRIAL_DAYS??7);if(!env.DB||!workspace||!Number.isInteger(days)||days<=0)return null;
+ const row=await env.DB.prepare('SELECT users.created_at FROM workspaces JOIN users ON users.id=workspaces.owner_id WHERE workspaces.id=?').bind(workspace).first();
+ const start=typeof row?.created_at==='string'?Date.parse(row.created_at.includes('T')?row.created_at:row.created_at.replace(' ','T')+'Z'):NaN;if(!Number.isFinite(start))return null;
+ const ends=start+days*86400000,left=ends-Date.now();
+ return{days,active:left>0,ends_at:new Date(ends).toISOString(),days_left:Math.max(0,Math.ceil(left/86400000))};
+}
+function trialPlan(env){const teams=PLAN_TIERS.find(tier=>tier.id==='teams');const messages=Number(env.BILLING_TRIAL_MESSAGES??1000);return{id:'trial',tier:'trial',name:'Teste grátis',accounts:teams.accounts,messages:Number.isSafeInteger(messages)&&messages>0?messages:1000};}
+async function paidPlan(env,workspace){
+ const cfg=config(env);if(!cfg||!env.DB||!workspace)return null;
+ const row=await env.DB.prepare('SELECT stripe_price_id,subscription_status,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
+ if(!row||!['active','trialing'].includes(row.subscription_status)||row.current_period_end<=nowSeconds())return null;
+ return commercialPlans().find(plan=>cfg.prices[plan.id]===row.stripe_price_id)||null;
+}
+async function activeTrial(env,workspace){
+ if(env.BILLING_ENFORCED!=='true'||await legacyBillingAccess(env,workspace)||await ownerExempt(env,workspace))return false;
+ return Boolean((await trialStatus(env,workspace))?.active);
+}
 export async function billingAccess(env,workspace){
  if(env.BILLING_ENFORCED!=='true')return true;
- const cfg=config(env);if(!cfg||!env.DB||!workspace)return false;
- try{const row=await env.DB.prepare('SELECT subscription_status,stripe_price_id,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();return Boolean(row&&['active','trialing'].includes(row.subscription_status)&&Object.values(cfg.prices).includes(row.stripe_price_id)&&row.current_period_end>nowSeconds());}catch{return false;}
+ if(await legacyBillingAccess(env,workspace)||await ownerExempt(env,workspace))return true;
+ const cfg=config(env);if(!env.DB||!workspace)return false;
+ try{const row=cfg&&await env.DB.prepare('SELECT subscription_status,stripe_price_id,current_period_end FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();if(row&&['active','trialing'].includes(row.subscription_status)&&Object.values(cfg.prices).includes(row.stripe_price_id)&&row.current_period_end>nowSeconds())return true;return await activeTrial(env,workspace);}catch{return false;}
+}
+
+export async function workspacePlan(env,workspace){
+ if(await ownerExempt(env,workspace))return null;
+ const paid=await paidPlan(env,workspace);if(paid)return paid;
+ return env.DB&&workspace&&await activeTrial(env,workspace)?trialPlan(env):null;
+}
+export async function withBillingAccountCapacity(env,workspace,existingId,operation){
+ const plan=await workspacePlan(env,workspace);if(!plan)return operation();
+ const lease=await lock(env,workspace);
+ try{const count=await env.DB.prepare("SELECT count(*) AS total FROM instagram_accounts WHERE workspace_id=? AND status='connected' AND id<>?").bind(workspace,existingId||'').first();if(count.total>=plan.accounts)throw error('billing_account_limit',409);return await operation();}
+ finally{await unlock(env,workspace,lease);}
+}
+export async function messageUsage(env,workspace){
+ const now=new Date(),start=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1),reset=Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1);
+ const usage=await env.DB.prepare("SELECT count(*) AS total FROM automation_jobs WHERE workspace_id=? AND status IN ('sending','accepted','unknown') AND COALESCE(attempt_at,completed_at)>=?").bind(workspace,start).first();
+ return{used:usage.total,resets_at:new Date(reset).toISOString()};
+}
+export async function assertMessageCapacity(env,workspace){
+ const plan=await workspacePlan(env,workspace);if(!plan)return;
+ // The caller reserves its durable send first; include that reservation and unknown
+ // outcomes so retries and concurrent workers cannot bypass the cap.
+ const usage=await messageUsage(env,workspace);
+ if(usage.used>plan.messages)throw error('billing_message_limit',409);
 }

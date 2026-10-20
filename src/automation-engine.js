@@ -6,7 +6,10 @@ import {sha} from './identity.js';
 import {matchFlow,normalizeWebhook} from './flow-runtime.js';
 import {sendAction,messagingReady} from './meta-client.js';
 export async function enqueueWebhook(body,env){
- const events=normalizeWebhook(body);let queued=0;
+ return enqueueEvents(normalizeWebhook(body),env);
+}
+export async function enqueueEvents(events,env){
+ let queued=0;
  // Meta can aggregate up to 1000 updates. Reject larger envelopes before writing.
  if(events.length>1000)throw Error('webhook_batch_too_large');
  const accounts=new Map(),statements=[];
@@ -75,7 +78,7 @@ async function processEvent(env,row,deadline){
    if(error.deferred){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='processing_deferred' WHERE id=?").bind(job.id).run();throw error;}
    if(error.retryable&&row.attempts<6){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='meta_rate_limited' WHERE id=?").bind(job.id).run();throw error;}
    const uncertain=error.message==='delivery_unknown';
-   const allowed=['delivery_unknown','messaging_disabled','account_reconnect_required','private_reply_window_expired','message_window_expired','event_time_invalid','invalid_comment','invalid_recipient','unsupported_action','meta_request_rejected','meta_invalid_response'];
+   const allowed=['billing_message_limit','delivery_unknown','messaging_disabled','account_reconnect_required','private_reply_window_expired','message_window_expired','event_time_invalid','invalid_comment','invalid_recipient','unsupported_action','meta_request_rejected','meta_invalid_response'];
    await env.DB.prepare('UPDATE automation_jobs SET status=?,error=?,completed_at=? WHERE id=?').bind(uncertain?'unknown':'failed',allowed.includes(error.message)?error.message:'processing_failed',Date.now(),job.id).run();
    if(error.message==='account_reconnect_required')await env.DB.prepare("UPDATE instagram_accounts SET status='reconnect_required' WHERE id=?").bind(account.id).run();
    if(uncertain)unknown=true;else failed=true;break;
