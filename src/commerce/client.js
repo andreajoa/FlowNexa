@@ -52,6 +52,8 @@ export function createCommerceClient({api,post,getWorkspace,getGeneration,getAcc
   return card;
  }
  async function load(){const generation=getGeneration(),workspace=getWorkspace(),run=++epoch;if(!workspace)return;if(loadedWorkspace!==workspace){loadedWorkspace=workspace;stores=[];host.replaceChildren();connectForm();message.hidden=true;}try{const r=await api('/api/commerce/stores?workspace='+encodeURIComponent(workspace));if(generation!==getGeneration()||run!==epoch)return;stores=r.stores||[];if(JSON.stringify(oauth)!==JSON.stringify(r.oauth||{})){oauth=r.oauth||{};connectForm();}host.replaceChildren();if(!stores.length)host.append(el('p','Conecte sua primeira loja para usar produtos, pedidos e rastreio nas conversas.','notice'));for(const store of stores)host.append(renderStore(store));}catch{if(generation!==getGeneration()||run!==epoch)return;host.replaceChildren(el('p','Não foi possível carregar as lojas. Atualize para tentar novamente.','notice'));}}
+ const installHelp=document.getElementById('commerce-install-help-button');
+ if(installHelp){const wrapper=installHelp.parentElement;const show=()=>wrapper.classList.remove('tooltip-dismissed');wrapper.addEventListener('mouseenter',show);installHelp.addEventListener('focus',show);installHelp.addEventListener('click',()=>{show();installHelp.focus();});installHelp.addEventListener('keydown',event=>{if(event.key==='Escape'){wrapper.classList.add('tooltip-dismissed');event.preventDefault();}});}
  connectForm();document.getElementById('commerce-refresh')?.addEventListener('click',load);
  return{load,stores:()=>stores};
 }
