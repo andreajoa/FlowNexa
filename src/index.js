@@ -1,3 +1,7 @@
+import {commerceApi} from './commerce/api.js';
+import {commerceOauth} from './commerce/oauth.js';
+import {commerceWebhook} from './commerce/webhooks.js';
+import {processCommerce} from './commerce/events.js';
 import {facebookApi} from './facebook-api.js';
 import {processFacebookJobs,metaFacebookWebhook} from './facebook-runtime.js';
 import {zernioConnection} from './zernio-connection.js';
@@ -32,6 +36,9 @@ async function processQueue(env){
 const app={async fetch(request,env,ctx={}){
  const url=new URL(request.url),path=url.pathname;
  if(path==='/mcp')return mcpHttp(request,env,(req,e)=>app.fetch(req,e));
+ if(path.startsWith('/webhooks/commerce/'))return commerceWebhook(request,env,path.split('/')[3]);
+ if(path.startsWith('/api/commerce/oauth/'))return commerceOauth(request,env);
+ if(path.startsWith('/api/commerce/stores'))return commerceApi(request,env);
  const legal=legalPage(path);if(legal&&request.method==='GET')return new Response(legal,{headers:{'content-type':'text/html; charset=utf-8','x-content-type-options':'nosniff'}});
  if(request.method==='GET'&&['/app','/app/','/app.js'].includes(path)){
   const script=path==='/app.js';return new Response(script?appClient():appPage(new URL(request.url).searchParams.get('lang')==='en'?'en':'pt-BR'),{headers:{'content-type':script?'application/javascript; charset=utf-8':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; connect-src 'self' https://api.stripe.com https://r.stripe.com https://m.stripe.network https://checkout.stripe.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}});
@@ -43,7 +50,7 @@ const app={async fetch(request,env,ctx={}){
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
-  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Date.now()+8000);}catch{facebook={error:'facebook_queue_unavailable'};}return json({...queue,accounts,facebook});
+  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Date.now()+8000);}catch{facebook={error:'facebook_queue_unavailable'};}let commerce;try{commerce=await processCommerce(env,3,Date.now()+8000);}catch{commerce={error:'commerce_queue_unavailable'};}return json({...queue,accounts,facebook,commerce});
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
  if(path.startsWith('/api/facebook/'))return facebookApi(request,env);

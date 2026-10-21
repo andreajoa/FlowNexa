@@ -198,7 +198,10 @@ export async function withBillingAccountCapacity(env,workspace,existingId,operat
 export async function messageUsage(env,workspace){
  const now=new Date(),start=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1),reset=Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1);
  const usage=await env.DB.prepare("SELECT count(*) AS total FROM automation_jobs WHERE workspace_id=? AND status IN ('sending','accepted','unknown') AND COALESCE(attempt_at,completed_at)>=?").bind(workspace,start).first();
- return{used:usage.total,resets_at:new Date(reset).toISOString()};
+ let commerceUsed=0;
+ const commerce=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='commerce_deliveries'").first();
+ if(commerce){const extra=await env.DB.prepare("SELECT count(*) AS total FROM commerce_deliveries d JOIN commerce_stores s ON s.id=d.store_id WHERE s.workspace_id=? AND d.status IN ('sending','accepted','unknown') AND COALESCE(d.attempt_at,d.completed_at)>=?").bind(workspace,start).first();commerceUsed=extra.total;}
+ return{used:usage.total+commerceUsed,resets_at:new Date(reset).toISOString()};
 }
 export async function assertMessageCapacity(env,workspace){
  const plan=await workspacePlan(env,workspace);if(!plan)return;

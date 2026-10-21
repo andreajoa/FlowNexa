@@ -1,3 +1,4 @@
+import {validateCommerceReferences} from './commerce/service.js';
 import {isZernioAccount,accountUsable,zernioMedia,zernioRequest,zernioAccountId} from './zernio-client.js';
 import {billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,respond as J,sameOrigin,payload} from './identity.js';
@@ -20,6 +21,7 @@ export async function runtimeApi(request,env){
     const account=await env.DB.prepare('SELECT id FROM instagram_accounts WHERE id=? AND workspace_id=?').bind(b.account_id,b.workspace_id).first();if(!account)return J({error:'account_not_found'},404);
     const valid=validateFlow(b.trigger_type,b.scope,b.configuration);if(!valid.ok)return J({error:valid.error},400);
     if(typeof b.name!=='string'||!b.name.trim()||b.name.length>100)return J({error:'invalid_name'},400);
+    await validateCommerceReferences(env,b.workspace_id,b.configuration);
     const id=crypto.randomUUID();await env.DB.prepare('INSERT INTO flows(id,workspace_id,account_id,name,trigger_type,scope,configuration) VALUES (?,?,?,?,?,?,?)').bind(id,b.workspace_id,b.account_id,b.name.trim(),b.trigger_type,b.scope,JSON.stringify(b.configuration)).run();return J({flow:await env.DB.prepare('SELECT * FROM flows WHERE id=?').bind(id).first()},201);
    }
   }
@@ -32,6 +34,7 @@ export async function runtimeApi(request,env){
     const valid=validateFlow(trigger,scope,config);if(!valid.ok)return J({error:valid.error},400);
     const name=b.name??flow.name;if(typeof name!=='string'||!name.trim()||name.length>100)return J({error:'invalid_name'},400);
     if(b.account_id&&b.account_id!==flow.account_id)return J({error:'account_change_not_supported'},400);
+    await validateCommerceReferences(env,flow.workspace_id,config);
     await env.DB.prepare('UPDATE flows SET name=?,trigger_type=?,scope=?,configuration=?,enabled=0,version=version+1 WHERE id=?').bind(name.trim(),trigger,scope,JSON.stringify(config),flow.id).run();return J({flow:await env.DB.prepare('SELECT * FROM flows WHERE id=?').bind(flow.id).first()});
    }
    if(request.method==='POST'&&f[2]==='simulate'){
@@ -42,6 +45,7 @@ export async function runtimeApi(request,env){
      if(!await billingAccess(env,flow.workspace_id))return J({error:'billing_subscription_required'},402);
      if(!messagingReady(env))return J({error:'messaging_not_configured'},503);
      const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(flow.account_id).first();if(!accountUsable(account))return J({error:'account_reconnect_required'},409);if(!messagingReady(env,account))return J({error:'messaging_not_configured'},503);
+     await validateCommerceReferences(env,flow.workspace_id,JSON.parse(flow.configuration));
      const valid=validateFlow(flow.trigger_type,flow.scope,JSON.parse(flow.configuration));if(!valid.ok)return J({error:valid.error},400);
     }
     await env.DB.prepare('UPDATE flows SET enabled=?,version=version+1 WHERE id=?').bind(f[2]==='publish'?1:0,flow.id).run();return J({flow:await env.DB.prepare('SELECT * FROM flows WHERE id=?').bind(flow.id).first()});

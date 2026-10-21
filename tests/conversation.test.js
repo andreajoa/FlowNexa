@@ -77,3 +77,27 @@ test('one absolute Meta deadline prevents POST when the private-comment GET exha
 test('an exhausted execution deadline defers before any Meta request instead of classifying an unsent message as unknown',async t=>{
  const{db,env}=await setup(t);const account=await db.prepare('SELECT * FROM instagram_accounts').first();env.RUNTIME_DEADLINE_MS=Date.now()-1;let calls=0;env.META_FETCH=async()=>{calls++;return Response.json({message_id:'must-not-send'});};await assert.rejects(()=>sendAction(env,account,{kind:'dm',sender_id:'200',at:Date.now()},{type:'message',text:'Question'}),error=>error.deferred===true);assert.equal(calls,0);
 });
+
+test('commerce conversation verifies email then reads the customer order through queued messages',async t=>{
+ const {ensureCommerceSchema}=await import('../src/commerce/schema.js');
+ const storeId='commerce-store';
+ const g={version:1,start:'ask',nodes:[
+  {id:'ask',type:'message',text:'Qual e-mail você usou na compra?',next:'email'},
+  {id:'email',type:'wait_reply',timeout_seconds:600,on_reply:'identify',on_timeout:'end'},
+  {id:'identify',type:'commerce',store_id:storeId,operation:'identify',next:'code',on_error:'error'},
+  {id:'code',type:'wait_reply',timeout_seconds:600,on_reply:'verify',on_timeout:'end'},
+  {id:'verify',type:'commerce',store_id:storeId,operation:'verify',next:'reference',on_error:'error'},
+  {id:'reference',type:'wait_reply',timeout_seconds:600,on_reply:'lookup',on_timeout:'end'},
+  {id:'lookup',type:'commerce',store_id:storeId,operation:'order',next:'end',on_error:'error'},
+  {id:'error',type:'message',text:'Consulta indisponível.',next:'end'},{id:'end',type:'end'}]};
+ assert.equal(validateGraph(g).ok,true);const {env,db,sent}=await setup(t,'dm_keyword',g);await ensureCommerceSchema(env);
+ await db.prepare('INSERT INTO commerce_stores(id,workspace_id,provider,remote_id,name,origin,encrypted_credentials,capabilities,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(storeId,'w','woocommerce','https://shop.example.com','Shop','https://shop.example.com',await encryptToken(JSON.stringify({origin:'https://shop.example.com',consumer_key:'key',consumer_secret:'secret'}),env.TOKEN_ENCRYPTION_KEY),' {"orders":true}',Date.now(),Date.now()).run();
+ let code,reads=0;env.COMMERCE_SEND_CODE=async v=>code=v.code;env.COMMERCE_FETCH=async()=>{reads++;return Response.json({id:42,number:'42',status:'completed',billing:{email:'customer@example.com'},meta_data:[]});};
+ await ingest(env,dm('commerce-start'));await ingest(env,dm('commerce-email','customer@example.com'));assert.match(sent.at(-1).message.text,/código/);assert.equal(reads,0);
+ await ingest(env,dm('commerce-code',code));assert.match(sent.at(-1).message.text,/confirmado/);assert.equal(reads,0);
+ await ingest(env,dm('commerce-order','42'));assert.match(sent.at(-1).message.text,/Pedido 42/);assert.equal(reads,1);assert.equal((await session(db)).status,'completed');
+ await ingest(env,dm('commerce-order','42'));assert.equal(reads,1);
+ // Global campaign opt-outs must reach commerce even when the campaign handler consumes the inbound first.
+ db.sqlite.exec("UPDATE flows SET configuration=json_set(configuration,'$.opt_out_keywords',json('[\"SAIR\"]'));UPDATE commerce_identities SET marketing_opt_in=1");
+ await ingest(env,dm('commerce-stop','SAIR'));assert.equal((await db.prepare('SELECT marketing_opt_in FROM commerce_identities').first()).marketing_opt_in,0);
+});
