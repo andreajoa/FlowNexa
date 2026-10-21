@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "width": 375,
+      "scroll": 375
+    },
+    {
+      "width": 768,
+      "scroll": 768
+    },
+    {
+      "width": 1440,
+      "scroll": 1440
+    }
+  ],
+  "errors": [],
+  "checks": [
+    "TikTok tab opens directly",
+    "No Instagram account needed",
+    "Actual API and SQLite draft save",
+    "Visual editor restricted to supported blocks",
+    "Publish from visual editor",
+    "Inbound event → queue → mocked provider → activity",
+    "Pause automation"
+  ],
+  "externalCalls": 0
+}

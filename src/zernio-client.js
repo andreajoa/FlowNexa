@@ -2,14 +2,14 @@
 export const isZernioAccount=account=>typeof account?.ig_user_id==='string'&&account.ig_user_id.startsWith('zernio:');
 export const zernioAccountId=account=>{const id=account?.ig_user_id?.slice(7);if(!isZernioAccount(account)||!/^\w{1,100}$/.test(id))throw Error('account_reconnect_required');return id;};
 export const accountUsable=account=>account?.status==='connected'&&(isZernioAccount(account)||Number(account.token_expires_at)>Date.now()/1000);
-export async function zernioRequest(env,path,{method='GET',body}={}){
+export async function zernioRequest(env,path,{method='GET',body,idempotencyKey}={}){
  if(!env.ZERNIO_API_KEY)throw Error('zernio_configuration_missing');
  const remaining=env.RUNTIME_DEADLINE_MS?env.RUNTIME_DEADLINE_MS-Date.now()-1500:15000;
  if(remaining<1000)throw Object.assign(Error('processing_deferred'),{deferred:true,retryable:true});
  const url=new URL('https://zernio.com/api/v1/'+path);
  if(url.origin!=='https://zernio.com'||!url.pathname.startsWith('/api/v1/'))throw Error('invalid_provider_path');
  let response;
- try{response=await(env.ZERNIO_FETCH||fetch)(url,{method,headers:{authorization:'Bearer '+env.ZERNIO_API_KEY,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(Math.min(15000,remaining))});}
+ try{response=await(env.ZERNIO_FETCH||fetch)(url,{method,headers:{authorization:'Bearer '+env.ZERNIO_API_KEY,'content-type':'application/json',...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},body:body===undefined?undefined:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(Math.min(15000,remaining))});}
  catch{throw Object.assign(Error(method==='GET'?'zernio_unavailable':'delivery_unknown'),{retryable:method==='GET'});}
  const data=await response.json().catch(()=>null);
  if(!response.ok){
