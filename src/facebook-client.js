@@ -1,7 +1,7 @@
 // A separate controller keeps Page state and errors outside the Instagram editor.
 export function createFacebookClient({api,post,getWorkspace,getGeneration,openGraph}) {
   const section=document.getElementById('facebook'),nav=document.getElementById('facebook-nav');
-  let epoch=0,view=null,available=false,wantedChannel=location.hash==='#facebook'||new URLSearchParams(location.search).has('facebook_connected')||new URLSearchParams(location.search).has('facebook_error')?'facebook':'instagram';
+  let epoch=0,view=null,available=false,wantedChannel=location.hash==='#facebook'||new URLSearchParams(location.search).has('facebook_connected')||new URLSearchParams(location.search).has('facebook_error')?'facebook':location.hash==='#tiktok-channel'?'tiktok':'instagram';
   const instagram=document.getElementById('instagram-channel'),unavailable=document.getElementById('facebook-unavailable');
   const tabs=Object.fromEntries(['instagram','facebook','tiktok','youtube'].map(key=>[key,document.getElementById('channel-'+key)]));
   const panels={instagram,facebook:section,tiktok:document.getElementById('tiktok-channel'),youtube:document.getElementById('youtube-channel')};
@@ -9,7 +9,7 @@ export function createFacebookClient({api,post,getWorkspace,getGeneration,openGr
   function choose(channel){
     for(const [key,panel]of Object.entries(panels)){panel.hidden=key!==channel||key==='facebook'&&!available;tabs[key].setAttribute('aria-selected',String(key===channel));tabs[key].tabIndex=key===channel?0:-1;}
     unavailable.hidden=channel!=='facebook'||available;nav.hidden=channel!=='facebook'||!available;for(const link of igLinks)link.hidden=channel!=='instagram';
-    document.querySelector('#app-sidebar .sidebar-help').textContent=channel==='instagram'?'Abra uma automação salva ou escolha um modelo para editar suas mensagens.':channel==='facebook'?'Gerencie as respostas da Página desta empresa no Messenger e nos comentários.':'Este canal ficará disponível neste mesmo espaço quando a integração for liberada.';
+    document.querySelector('#app-sidebar .sidebar-help').textContent=channel==='instagram'?'Abra uma automação salva ou escolha um modelo para editar suas mensagens.':channel==='facebook'?'Gerencie as respostas da Página desta empresa no Messenger e nos comentários.':channel==='tiktok'?'Conecte sua conta TikTok e prepare respostas para mensagens e comentários.':'Este canal ficará disponível neste mesmo espaço quando a integração for liberada.';
   }
   for(const [key,tab]of Object.entries(tabs)){
     tab.addEventListener('click',()=>{wantedChannel=key;choose(key);});

@@ -1,3 +1,5 @@
+import {tiktokApi} from './tiktok/api.js';
+import {processTikTokJobs} from './tiktok/runtime.js';
 import {commerceApi} from './commerce/api.js';
 import {commerceOauth} from './commerce/oauth.js';
 import {commerceWebhook} from './commerce/webhooks.js';
@@ -50,9 +52,10 @@ const app={async fetch(request,env,ctx={}){
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
-  const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Date.now()+8000);}catch{facebook={error:'facebook_queue_unavailable'};}let commerce;try{commerce=await processCommerce(env,3,Date.now()+8000);}catch{commerce={error:'commerce_queue_unavailable'};}return json({...queue,accounts,facebook,commerce});
+  const deadline=Date.now()+55000;const [queue,accounts]=await Promise.all([processQueue(env),refreshAccounts(env)]);let facebook;try{facebook=await processFacebookJobs(env,5,Math.min(deadline,Date.now()+5000));}catch{facebook={error:'facebook_queue_unavailable'};}let tiktok;try{tiktok=await processTikTokJobs(env,8,Math.min(deadline,Date.now()+5000));}catch{tiktok={error:'tiktok_queue_unavailable'};}let commerce;try{commerce=await processCommerce(env,3,Math.min(deadline,Date.now()+5000));}catch{commerce={error:'commerce_queue_unavailable'};}return json({...queue,accounts,facebook,tiktok,commerce});
  }
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
+ if(path.startsWith('/api/tiktok/'))return tiktokApi(request,env);
  if(path.startsWith('/api/facebook/'))return facebookApi(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
  if(path==='/webhooks/zernio')return zernioWebhook(request,env);
