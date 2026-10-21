@@ -29,6 +29,7 @@ export function validateGraph(graph){
    if(!['equals','contains','contains_any','date_between'].includes(n.operator)||!Array.isArray(n.cases)||n.cases.length<2||n.cases.length>10||n.cases.some(c=>!c||!id(c.id)||!text(c.label,40)||!text(c.value,1000))||new Set(n.cases.map(c=>c.id)).size!==n.cases.length||new Set(n.cases.map(c=>c.value.normalize('NFKC').toUpperCase())).size!==n.cases.length)return invalid('invalid_graph_switch');if(n.operator==='date_between'&&n.cases.some(c=>!validDateRange(c.value)))return invalid('invalid_graph_switch');edges=[...n.cases.map(c=>c.next),n.default];
   }
   else if(n.type==='delay'){if(!Number.isSafeInteger(n.seconds)||n.seconds<60||n.seconds>82800)return invalid('invalid_graph_delay');edges=[n.next];}
+  else if(n.type==='commerce'){if(!id(n.store_id)||!['identify','verify','products','order','tracking','abandoned_carts','content','marketing_opt_in'].includes(n.operation)||n.search!==undefined&&(!text(n.search,80)))return invalid('invalid_commerce_node');edges=[n.next,n.on_error];}
   else if(n.type==='end')edges=[];
   else return invalid('unsupported_graph_node');
   if(edges.some(edge=>!id(edge)))return invalid('invalid_graph_target');nodes.set(n.id,{node:n,edges});

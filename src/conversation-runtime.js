@@ -1,3 +1,4 @@
+import {commerceNode} from './commerce/customer.js';
 import {accountUsable} from './zernio-client.js';
 import {campaignSuppressed} from './campaign-opt-out.js';
 import {isOptOut} from './flow-runtime.js';
@@ -20,7 +21,7 @@ async function drive(env,row,state,deadline){
  const nodes=new Map(state.graph.nodes.map(node=>[node.id,node]));
  for(let count=0;count<35&&Date.now()<deadline;count++){
   const account=await eligibility(env,row);if(!account){await save(env,row,state,{status:'cancelled',error:'flow_account_or_billing_changed'});return;}
-  const node=nodes.get(row.node_id);if(!node){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
+  let node=nodes.get(row.node_id);if(!node){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   if(row.status==='waiting_reply'){
    if(row.due_at>Date.now())return;
    if(node.deadline_seconds_from_start!==undefined&&Date.now()>=row.created_at+node.deadline_seconds_from_start*1000){await save(env,row,state,{status:'completed',error:'conversation_deadline_expired'});return;}
@@ -48,6 +49,17 @@ async function drive(env,row,state,deadline){
    await save(env,row,state,{status:'waiting_reply',due_at:dueAt});return;
   }
   if(node.type==='delay'){state.afterMessage=false;await save(env,row,state,{status:'delayed',due_at:Date.now()+node.seconds*1000});return;}
+  if(node.type==='commerce'){
+   try{
+    // Persist the resolved step before sending: resuming a delivery must not consume an OTP twice.
+    if(state.commerceResult?.step!==row.step_index){
+     const text=await commerceNode(env,row,state,node);
+     state.commerceResult={step:row.step_index,text};await save(env,row,state);
+    }
+    node={...node,type:'message',text:state.commerceResult.text};
+   }
+   catch(error){await save(env,row,state,{node_id:node.on_error,step_index:row.step_index+1,error:error.message?.startsWith('commerce_')?error.message:'commerce_unavailable'});continue;}
+  }
   if(!['message','image','video','buttons'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   let event,action;
   // A returning contact who already asked something specific gets the answer, not the generic greeting again.

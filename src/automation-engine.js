@@ -1,3 +1,4 @@
+import {observeCommerceInbound} from './commerce/customer.js';
 import {processCampaignOptOut,campaignSuppressed} from './campaign-opt-out.js';
 import {startConversation,resumeConversation} from './conversation-runtime.js';
 import {billingAccess} from './billing.js';
@@ -31,6 +32,7 @@ async function processEvent(env,row,deadline){
  const event=JSON.parse(await decryptToken(row.encrypted_event,env.TOKEN_ENCRYPTION_KEY));
  const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();
  if(!account||account.status!=='connected')return 'cancelled';
+ await observeCommerceInbound(env,account,event);
  if(await processCampaignOptOut(env,account,event,row.id))return 'opted_out';
  if(!await billingAccess(env,account.workspace_id)){await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='billing_subscription_required',completed_at=? WHERE event_id=? AND status='pending'").bind(Date.now(),row.id).run();return 'cancelled';}
  const started=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(row.id).first();if(started)return 'conversation_started';

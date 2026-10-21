@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "width": 375,
+      "scroll": 375
+    },
+    {
+      "width": 768,
+      "scroll": 768
+    },
+    {
+      "width": 1440,
+      "scroll": 1440
+    }
+  ],
+  "errors": [],
+  "checks": [
+    "connect form → actual API → encrypted SQLite",
+    "credential cleared",
+    "query → actual API → mocked Shopify",
+    "order automation opens graph editor"
+  ],
+  "externalCalls": 0
+}
