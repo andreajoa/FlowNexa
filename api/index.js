@@ -8,6 +8,23 @@ export const config={api:{bodyParser:false}};
 const MAX_BODY=1024*1024;
 export default async function handler(req,res){
  const pathname=new URL(req.url||"/","https://flownexa.invalid").pathname;
+ // Public crawl discovery only; private application and API endpoints stay out of the sitemap.
+ if(req.method==="GET"&&pathname==="/robots.txt"){
+  res.statusCode=200;
+  res.setHeader("content-type","text/plain; charset=utf-8");
+  res.setHeader("cache-control","public, max-age=3600");
+  res.setHeader("x-content-type-options","nosniff");
+  return res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /webhooks/\nDisallow: /mcp\nDisallow: /app.js\nSitemap: https://flownex.online/sitemap.xml\n");
+ }
+ if(req.method==="GET"&&pathname==="/sitemap.xml"){
+  const urls=["/","/privacy","/terms","/data-deletion"];
+  const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+urls.map(path=>'  <url><loc>https://flownex.online'+path+'</loc></url>').join('\n')+'\n</urlset>\n';
+  res.statusCode=200;
+  res.setHeader("content-type","application/xml; charset=utf-8");
+  res.setHeader("cache-control","public, max-age=3600");
+  res.setHeader("x-content-type-options","nosniff");
+  return res.end(sitemap);
+ }
  if(req.method==="GET" && (pathname==="/"||pathname==="/landing.js")){
   const script=pathname==="/landing.js";
   res.statusCode=200;
