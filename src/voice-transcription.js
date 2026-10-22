@@ -1,9 +1,10 @@
 // Voice-note transcription: never answer an attachment until its speech is understood.
 import {transcribe} from 'ai';
 import {gateway} from '@ai-sdk/gateway';
+import {cloudflareConfigured,freeOnly,cloudflareTranscribe} from './cloudflare-ai.js';
 const LIMIT=12*1024*1024;
 const CDN=['fbcdn.net','fbsbx.com','cdninstagram.com'];
-export const voiceReady=env=>env.VOICE_TRANSCRIPTION_ENABLED==='true'&&Boolean(env.OPENAI_API_KEY||env.AI_GATEWAY_ENABLED==='true');
+export const voiceReady=env=>env.VOICE_TRANSCRIPTION_ENABLED==='true'&&(freeOnly(env)?cloudflareConfigured(env):Boolean(cloudflareConfigured(env)||env.OPENAI_API_KEY||env.AI_GATEWAY_ENABLED==='true'));
 function mediaURL(raw){
   let url;try{url=new URL(raw);}catch{throw Error('unsafe_audio_url');}
   const host=url.hostname.toLowerCase();
@@ -25,7 +26,9 @@ export async function transcribeIncomingVoice(event,env){
   if(!voiceReady(env))throw Error('transcription_unconfigured');
   const {bytes,mime}=await downloadAudio(mediaURL(event.audio_url),env);
   let text;
-  if(env.OPENAI_API_KEY){
+  if(freeOnly(env)||cloudflareConfigured(env)){
+    text=await cloudflareTranscribe(env,bytes);
+  }else if(env.OPENAI_API_KEY){
     const type=event.audio_mime_type||mime||'application/octet-stream';
     const ext=type.includes('webm')?'webm':type.includes('wav')?'wav':type.includes('mpeg')?'mp3':type.includes('mp4')?'m4a':'ogg';
     const form=new FormData();form.set('model','gpt-transcribe');form.set('file',new Blob([bytes],{type}), 'voice-note.'+ext);

@@ -61,3 +61,55 @@ test('Vercel AI Gateway can respond as Paul without an external provider key',as
   const answer=await generatePaulReply(env,{text:'Can you tell me about the book?'});
   assert.match(answer,/Gilberto/);
 });
+
+test('Workers AI Whisper and Llama operate in strict zero-paid-fallback mode',async()=>{
+  const {voiceReady}=await import('../src/voice-transcription.js');
+  const {paulReady}=await import('../src/paul-replies.js');
+  const urls=[];
+  const env={
+    CLOUDFLARE_AI_ONLY:'true',CLOUDFLARE_AI_ENABLED:'true',
+    CLOUDFLARE_AI_ACCOUNT_ID:'7ef2450965811249288bc35188f7cbf9',
+    CLOUDFLARE_AI_TOKEN:'fake-cloudflare-token-1234567',
+    VOICE_TRANSCRIPTION_ENABLED:'true',PAUL_ASSISTANT_ENABLED:'true',
+    OPENAI_API_KEY:'must-not-call-paid-provider',AI_GATEWAY_ENABLED:'true',
+    VOICE_MEDIA_FETCH:async()=>new Response(new Uint8Array(384),{status:200,headers:{'content-type':'audio/ogg'}}),
+    CLOUDFLARE_AI_FETCH:async(url,req)=>{
+      urls.push(url);
+      assert.equal(req.headers.authorization,'Bearer fake-cloudflare-token-1234567');
+      if(url.endsWith('/@cf/openai/whisper')){
+        assert.equal(req.headers['content-type'],'application/octet-stream');
+        assert.equal(req.body.byteLength,384);
+        return Response.json({success:true,result:{text:'I am looking for the book'}});
+      }
+      if(url.endsWith('/@cf/meta/llama-3.1-8b-instruct-fp8')){
+        const data=JSON.parse(req.body);
+        assert.match(data.messages[0].content,/assistant for Gilberto/);
+        assert.match(data.messages[1].content,/book/);
+        return Response.json({success:true,result:{response:"Hi, I'm Paul. What would you like to know about Gilberto's book?"}});
+      }
+      assert.fail('unexpected external model');
+    }
+  };
+  assert.equal(voiceReady(env),true);
+  assert.equal(paulReady(env),true);
+  const transcript=await transcribeIncomingVoice({audio_url:'https://lookaside.fbsbx.com/voice.ogg'},env);
+  const reply=await generatePaulReply(env,{text:transcript});
+  assert.match(reply,/Gilberto/);
+  assert.equal(urls.length,2);
+  assert(urls.every(url=>url.startsWith('https://api.cloudflare.com/')));
+});
+
+test('free-only mode blocks both AI services without a Cloudflare credential even with paid keys set',async()=>{
+  const {voiceReady}=await import('../src/voice-transcription.js');
+  const {paulReady}=await import('../src/paul-replies.js');
+  const env={CLOUDFLARE_AI_ONLY:'true',VOICE_TRANSCRIPTION_ENABLED:'true',PAUL_ASSISTANT_ENABLED:'true',OPENAI_API_KEY:'dont-use-me'};
+  assert.equal(voiceReady(env),false);
+  assert.equal(paulReady(env),false);
+  await assert.rejects(transcribeIncomingVoice({audio_url:'https://lookaside.fbsbx.com/voice.ogg'},env),/transcription_unconfigured/);
+  await assert.rejects(generatePaulReply(env,{text:'Hello'}),/paul_unconfigured/);
+});
+
+test('Workers AI over-limit response never falls back to a billable provider',async()=>{
+  const env={CLOUDFLARE_AI_ONLY:'true',CLOUDFLARE_AI_ENABLED:'true',CLOUDFLARE_AI_ACCOUNT_ID:'7ef2450965811249288bc35188f7cbf9',CLOUDFLARE_AI_TOKEN:'fake-cloudflare-token-1234567',PAUL_ASSISTANT_ENABLED:'true',OPENAI_API_KEY:'should-not-be-used',CLOUDFLARE_AI_FETCH:async()=>new Response('{}',{status:429})};
+  await assert.rejects(generatePaulReply(env,{text:'Hello'}),/cloudflare_ai_request_failed_429/);
+});

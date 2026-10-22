@@ -31,3 +31,20 @@ Automated tests exercise both inbound audio schemas, allowlisting, successful mo
 Signed CDN media URLs expire. Events are encrypted and queued before audio retrieval; webhook processing is scheduled with the platform's deferred execution context. Measure queue latency, CDN expiry, Vercel function execution limits and AI Gateway account availability with real voice notes before enabling. A failed transcription or response must not fabricate an understanding of the recording. Apply a bounded spending limit in AI Gateway.
 
 If a user directly asks whether Paul is automated, answer truthfully. Paul must not pretend to be Gilberto or a human employee.
+
+## Zero-cost Cloudflare Workers AI integration (October 22, 2026)
+
+The dedicated zero-billing provider is Cloudflare Workers AI. Both operations are now implemented via authenticated server-side Cloudflare API REST calls:
+
+- Speech to text: `@cf/openai/whisper`, binary input and `result.text` output.
+- Paul contextual English response: `@cf/meta/llama-3.1-8b-instruct-fp8`, chat messages input and `result.response` output.
+- Server-only feature configuration (set **only** on the app server, never in client-side flows):
+  - `CLOUDFLARE_AI_ONLY=true` (critical fail-closed guard: **never** use existing OpenAI or Vercel AI Gateway credentials)
+  - `CLOUDFLARE_AI_ENABLED=true`
+  - `CLOUDFLARE_AI_ACCOUNT_ID=<Cloudflare account ID>`
+  - `CLOUDFLARE_AI_TOKEN=<Workers AI scoped API token>`
+  - `VOICE_TRANSCRIPTION_ENABLED=true` and `PAUL_ASSISTANT_ENABLED=true`
+- Cloudflare Workers AI Free plan includes 10,000 neurons a day, and fails further inference requests once the free allocation is spent. **Do not upgrade the Cloudflare account or enable paid AI billing.** The application never silently falls back to other providers when `CLOUDFLARE_AI_ONLY=true`. Test this limit by simulating HTTP 429 errors before shipping.
+- No additional Cloudflare Worker deployment is required: the existing FlowNexa server uses Workers AI REST API directly. A Cloudflare Worker would be an optional future architecture change, not a prerequisite.
+- Missing in live production until verified: secure token provision, published flow `assistant_mode: paul_en`, team `flownexa3` Vercel permission, the enabled feature flags, and a **real** authenticated Instagram voice-message-to-reply test. Do not claim the feature is live until all these complete.
+- Production safeguards: privacy disclosure, signed attachment handling, audio expiry and processing latency, maximum message age, free plan only, no paid credential fallback, and no hallucinated answers to unintelligible recordings.
