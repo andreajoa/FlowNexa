@@ -9,6 +9,7 @@ const OUTBOUND=['message','buttons','image','video'];
 // graphs to immediate messages, waits for a reply, conditions and switches.
 export function validateFacebookGraph(graph){
  const result=validateGraph(graph);if(!result.ok)return result;
+ if(graph.nodes.some(n=>['audio','transcribe_audio','ai_reply'].includes(n.type)))return{ok:false,error:'facebook_graph_audio_unsupported'};
  if(graph.nodes.some(n=>n.type==='delay'))return{ok:false,error:'facebook_graph_delay_unsupported'};
  return{ok:true};
 }

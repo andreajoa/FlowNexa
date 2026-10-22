@@ -43,7 +43,7 @@ export async function zernioSend(env,account,event,action){
   if(age>86400000)throw Error('message_window_expired');
   path=`inbox/conversations/${encodeURIComponent(event.conversation_id)}/messages`;
   if(action.type==='message'){body.message=action.text;if(action.quick_replies)body.quickReplies=action.quick_replies;}
-  else if(['image','video'].includes(action.type)){body.attachmentUrl=action.url;body.attachmentType=action.type;}
+  else if(['image','video','audio'].includes(action.type)){body.attachmentUrl=action.url;body.attachmentType=action.type;}
   // Generic card preserves FlowNexa's 80-character heading, unlike the 640-char button template.
   else if(action.type==='buttons')body.template={type:'generic',elements:[{title:action.text,buttons:action.buttons.map(button=>({...button,type:button.type==='web_url'?'url':'postback'}))}]};
   else throw Error('unsupported_action');

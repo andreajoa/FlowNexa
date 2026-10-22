@@ -138,10 +138,13 @@ export async function agentRuntimeApi(request, env) {
     max_quick_replies: 13,
     max_wait_seconds: 259200
    },
-   node_types: ['message', 'buttons', 'image', 'video', 'wait_reply', 'condition', 'switch', 'delay', 'end'],
+   node_types: ['message', 'buttons', 'image', 'video', 'audio', 'transcribe_audio', 'ai_reply', 'wait_reply', 'condition', 'switch', 'delay', 'end'],
    examples: {
     message: {id: 'msg_welcome', type: 'message', text: 'Olá! Como posso ajudar?', next: 'wait_reply'},
     buttons: {id: 'msg_options', type: 'buttons', text: 'Escolha uma opção:', buttons: [{type: 'web_url', title: 'Acessar Site', url: 'https://example.com'}], next: 'end'},
+    transcribe_audio: {id:'voice_input',type:'transcribe_audio',next:'ai_answer'},
+    ai_reply: {id:'ai_answer',type:'ai_reply',instructions:'You are the business assistant. Answer briefly in English using only known information.',next:'end'},
+    audio: {id:'send_audio',type:'audio',url:'https://example.com/audio.mp3',next:'end'},
     wait_reply: {id: 'wait_reply', type: 'wait_reply', timeout_seconds: 86400, on_reply: 'cond_check', on_timeout: 'timeout_msg'},
     condition: {id: 'cond_check', type: 'condition', operator: 'contains', value: 'SIM', yes: 'plan_msg', no: 'other_msg'},
     end: {id: 'end', type: 'end'}

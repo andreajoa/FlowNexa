@@ -33,11 +33,13 @@ create_flow arguments: name (<=100 chars), trigger_type, scope, configuration.
 ## Graph contract (enforced)
 { "version": 1, "start": "<node id>", "nodes": [ ... ] }
 - 2 to 30 nodes, ids unique, every node reachable from start, NO cycles (a path can never go back), every exit points to an existing node.
-- start must be message, condition or switch (not buttons). Always end paths in an { "type": "end" } node.
+- start must be message, transcribe_audio, ai_reply, condition or switch (not buttons). Always end paths in an { "type": "end" } node.
 Node types:
 - message: { id, type:"message", text (<=1000), quick_replies? [ {title <=20, payload} ] (1-13), next }
 - buttons: { id, type:"buttons", text (<=80), buttons [1-3] of {type:"web_url", title <=20, url https} or {type:"postback", title <=20, payload}, next }
-- image | video: { id, type, url (direct https file), next }
+- image | video | audio: { id, type, url (direct public https media file), next }
+- transcribe_audio: { id, type:"transcribe_audio", next } Enables inbound Instagram DM/story voice note processing for this flow; next nodes receive recognized speech as the input message. No secret exposed.
+- ai_reply: { id, type:"ai_reply", instructions (1-1200 characters, business-specific, NO secrets), next } Generates a contextual response using this workspace's instructions and the inbound text or transcript on Cloudflare Free-only. Stops safely if unavailable.
 - wait_reply: { id, type:"wait_reply", timeout_seconds (60-259200), on_reply, on_timeout }
 - condition: { id, type:"condition", operator:"contains"|"equals"|"contains_any", value, yes, no }
 - switch: { id, type:"switch", operator:"contains"|"equals"|"contains_any"|"date_between", cases [2-10] {id, label <=40, value, next}, default }

@@ -7,6 +7,8 @@ import {billingAccess} from './billing.js';
 import {sendAction,messagingReady} from './meta-client.js';
 import {validateGraph,conditionMatches,switchTarget} from './conversation-graph.js';
 import {shouldUsePaul,generatePaulReply,paulReady} from './paul-replies.js';
+import {cloudflareWorkspaceReply} from './cloudflare-ai.js';
+import {consumeVoiceQuota} from './voice-quotas.js';
 const active="('running','waiting_reply','delayed')";
 async function lock(env,id){const lease=crypto.randomUUID(),now=Date.now();const row=await env.DB.prepare(`UPDATE conversation_sessions SET lease_id=?,lease_until=? WHERE id=? AND status IN ${active} AND (lease_until IS NULL OR lease_until<?) RETURNING *`).bind(lease,now+60000,id,now).first();if(!row){const error=Error('conversation_busy');error.retryable=true;throw error;}return row;}
 async function save(env,row,state,changes={}){
@@ -48,8 +50,9 @@ async function drive(env,row,state,deadline){
    const dueAt=Math.min(state.waitingSince+node.timeout_seconds*1000,node.deadline_seconds_from_start===undefined?Infinity:row.created_at+node.deadline_seconds_from_start*1000);
    await save(env,row,state,{status:'waiting_reply',due_at:dueAt});return;
   }
+  if(node.type==='transcribe_audio'){await save(env,row,state,{node_id:node.next,step_index:row.step_index+1});continue;}
   if(node.type==='delay'){state.afterMessage=false;await save(env,row,state,{status:'delayed',due_at:Date.now()+node.seconds*1000});return;}
-  if(!['message','image','video','buttons'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
+  if(!['message','image','video','audio','buttons','ai_reply'].includes(node.type)){await save(env,row,state,{status:'failed',error:'invalid_graph_node'});return;}
   let event,action;
   // A returning contact who already asked something specific gets the answer, not the generic greeting again.
   if(node.id===state.graph.start&&state.isReturning&&!state.skippedWelcome&&state.origin.kind!=='comment'&&(state.replyText||state.replyPayload)){
@@ -72,11 +75,16 @@ async function drive(env,row,state,deadline){
    else if(state.origin.kind==='dm')textMsg=node.text.replace(/vi seu coment[aá]rio e quis te responder pessoalmente por aqui\.?/gi,'que bom ter você por aqui!').replace(/vi seu coment[aá]rio\.?/gi,'que bom ter você por aqui!');
   }
   if(state.origin.kind==='comment'&&!state.sentFirst){event=state.origin;action={type:'private_reply',text:textMsg};}
-  else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:['image','video'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
-  if(action.type==='message'&&event.interaction==='audio_transcribed'&&shouldUsePaul(state.assistantMode,event,node.id)&&!paulReady(env)){
+  else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:node.type==='ai_reply'?{type:'message',text:''}:['image','video','audio'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
+  if(node.type==='ai_reply'&&action.type==='message'){
+   if(!['dm','story'].includes(event.kind)){await save(env,row,state,{status:'failed',error:'ai_reply_requires_inbound_dm'});return;}
+   try{await consumeVoiceQuota(env,row.workspace_id,'ai_reply');action.text=await cloudflareWorkspaceReply(env,node.instructions,event.text||'');}
+   catch{await save(env,row,state,{status:'failed',error:'workspace_reply_unavailable'});return;}
+  }
+  if(node.type!=='ai_reply'&&action.type==='message'&&event.interaction==='audio_transcribed'&&shouldUsePaul(state.assistantMode,event,node.id)&&!paulReady(env)){
    await save(env,row,state,{status:'failed',error:'voice_reply_unavailable'});return;
   }
-  if(action.type==='message'&&paulReady(env)&&shouldUsePaul(state.assistantMode,event,node.id)){
+  if(node.type!=='ai_reply'&&action.type==='message'&&paulReady(env)&&shouldUsePaul(state.assistantMode,event,node.id)){
    // The scripted answer remains a safe fallback if the language service is unavailable.
    try{action.text=await generatePaulReply(env,event);}
    catch{

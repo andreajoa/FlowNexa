@@ -159,7 +159,7 @@ export const MCP_TOOLS = [
  },
  {
   name: 'flownexa_get_node_templates',
-  description: 'Get syntax templates and schema limits for conversation graph nodes (message, buttons, wait_reply, condition, switch, delay, end).',
+  description: 'Get syntax templates and schema limits for conversation graph nodes (message, buttons, image, video, audio, transcribe_audio, ai_reply, wait_reply, condition, switch, delay, end).',
   inputSchema: {
    type: 'object',
    properties: {}
