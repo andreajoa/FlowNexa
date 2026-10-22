@@ -12,7 +12,10 @@ import {instagramOauth} from './instagram-oauth.js';
 import {accountApi} from './auth.js';
 import {runtimeApi} from './runtime-api.js';
 import {enqueueWebhook,processPending} from './automation-engine.js';
-import {respond as json,sha} from './identity.js';
+import {respond as json,sha,getSessionUser,requireMembership} from './identity.js';
+import {voiceReady} from './voice-transcription.js';
+import {paulReady} from './paul-replies.js';
+import {cloudflareConfigured,freeOnly} from './cloudflare-ai.js';
 import {messagingReady} from './meta-client.js';
 import {agentTokensApi,agentRuntimeApi} from './agent-api.js';
 import {mcpHttp} from './mcp-http.js';
@@ -40,6 +43,25 @@ const app={async fetch(request,env,ctx={}){
   if(!env.DB)return json({status:'degraded',database:false},503);
   // Public availability checks must not expose tenants or change their automations.
   try{await env.DB.prepare('SELECT 1 AS ok FROM auth_tokens LIMIT 1').first();return json({status:'ok',app:'FlowNexa'});}catch{return json({status:'degraded',database:false},503);}
+ }
+ // Authenticated, read-only readiness probe; never reveals credentials or triggers model billing.
+ if(path==='/api/voice/status'&&request.method==='GET'){
+  if(!env.DB)return json({error:'database_unavailable'},503);
+  const user=await getSessionUser(request,env);
+  if(!user)return json({error:'unauthorized'},401);
+  if(!await requireMembership(env.DB,user.id,url.searchParams.get('workspace')))return json({error:'forbidden'},403);
+  const enabled=cloudflareConfigured(env);
+  let credential='unconfigured';
+  if(enabled){
+   try{
+    const result=await fetch('https://api.cloudflare.com/client/v4/accounts/'+env.CLOUDFLARE_AI_ACCOUNT_ID+'/tokens/verify',{
+      headers:{authorization:'Bearer '+env.CLOUDFLARE_AI_TOKEN},redirect:'error',signal:AbortSignal.timeout(6000),
+    });
+    const data=await result.json().catch(()=>null);
+    credential=result.ok&&data?.success===true&&data.result?.status==='active'?'valid':'invalid';
+   }catch{credential='unreachable';}
+  }
+  return json({provider:'cloudflare',free_only:freeOnly(env),cloudflare_configured:enabled,credential,voice_ready:voiceReady(env),paul_ready:paulReady(env)},200);
  }
  if(path==='/api/internal/tick'){
   const token=request.headers.get('authorization');if(request.method!=='POST'||!env.CRON_SECRET||!token||await sha(token)!==await sha('Bearer '+env.CRON_SECRET))return json({error:'forbidden'},403);
