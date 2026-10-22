@@ -6,6 +6,7 @@ import {sha} from './identity.js';
 import {billingAccess} from './billing.js';
 import {sendAction,messagingReady} from './meta-client.js';
 import {validateGraph,conditionMatches,switchTarget} from './conversation-graph.js';
+import {shouldUsePaul,generatePaulReply} from './paul-replies.js';
 const active="('running','waiting_reply','delayed')";
 async function lock(env,id){const lease=crypto.randomUUID(),now=Date.now();const row=await env.DB.prepare(`UPDATE conversation_sessions SET lease_id=?,lease_until=? WHERE id=? AND status IN ${active} AND (lease_until IS NULL OR lease_until<?) RETURNING *`).bind(lease,now+60000,id,now).first();if(!row){const error=Error('conversation_busy');error.retryable=true;throw error;}return row;}
 async function save(env,row,state,changes={}){
@@ -72,6 +73,10 @@ async function drive(env,row,state,deadline){
   }
   if(state.origin.kind==='comment'&&!state.sentFirst){event=state.origin;action={type:'private_reply',text:textMsg};}
   else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:['image','video'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
+  if(action.type==='message'&&env.PAUL_ASSISTANT_ENABLED==='true'&&shouldUsePaul(state.assistantMode,event,node.id)){
+   // The scripted answer remains a safe fallback if the language service is unavailable.
+   try{action.text=await generatePaulReply(env,event);}catch{}
+  }
   action.source_at=event.at;
   const effect=await sha('conversation:'+row.id+':'+row.step_index),jobId=await sha('conversation-job:'+effect);
   await env.DB.prepare('INSERT OR IGNORE INTO automation_jobs(id,event_id,account_id,workspace_id,flow_id,flow_version,action_index,action_type,effect_key,encrypted_action) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(jobId,row.origin_event_id,row.account_id,row.workspace_id,row.flow_id,row.flow_version,1000+row.step_index,action.type,effect,await encryptToken(JSON.stringify(action),env.TOKEN_ENCRYPTION_KEY)).run();
@@ -109,7 +114,7 @@ export async function startConversation(env,account,flow,event,eventId){
  const recipient=await sha(event.sender_id);
  const priorSession=await env.DB.prepare("SELECT id,node_id,status,encrypted_state,updated_at FROM conversation_sessions WHERE account_id=? AND recipient_hash=? ORDER BY updated_at DESC LIMIT 1").bind(account.id,recipient).first();
  const isReturning=Boolean(priorSession);
- const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,replyPerMessage:c.reply_per_message===true,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
+ const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,assistantMode:c.assistant_mode||null,replyPerMessage:c.reply_per_message===true,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,recipient,eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
  if(!inserted.meta.changes&&c.reply_per_message){const error=Error('conversation_busy');error.deferred=true;throw error;}
  return inserted.meta.changes?'conversation_started':'conversation_already_active';

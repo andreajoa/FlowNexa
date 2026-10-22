@@ -4,6 +4,7 @@ import {billingAccess} from './billing.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {sha} from './identity.js';
 import {matchFlow,normalizeWebhook} from './flow-runtime.js';
+import {transcribeIncomingVoice} from './voice-transcription.js';
 import {sendAction,messagingReady} from './meta-client.js';
 export async function enqueueWebhook(body,env){
  return enqueueEvents(normalizeWebhook(body),env);
@@ -17,6 +18,13 @@ export async function enqueueEvents(events,env){
   if(!accounts.has(event.account))accounts.set(event.account,await env.DB.prepare("SELECT id,workspace_id FROM instagram_accounts WHERE ig_user_id=? AND status='connected'").bind(event.account).first());
   const account=accounts.get(event.account);if(!account)continue;
   const id=await sha(account.id+':'+event.key),now=Date.now();
+  if(event.audio_url){
+   // Never send a generic greeting as though we understood an untranscribed recording.
+   if(env.VOICE_TRANSCRIPTION_ENABLED!=='true'||!env.OPENAI_API_KEY)continue;
+   if(await env.DB.prepare('SELECT id FROM automation_events WHERE id=?').bind(id).first())continue;
+   event.text=await transcribeIncomingVoice(event,env);
+   event.interaction='audio_transcribed';delete event.audio_url;delete event.audio_mime_type;
+  }
   statements.push(env.DB.prepare('INSERT OR IGNORE INTO automation_events(id,account_id,workspace_id,encrypted_event,received_at,event_at,due_at) VALUES (?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),now,event.at,now));
  }
  // Bounded database requests; a failed chunk is retried through Meta's webhook retry.

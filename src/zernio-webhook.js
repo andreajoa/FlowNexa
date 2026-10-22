@@ -1,6 +1,7 @@
 import {acceptFacebookWebhook} from './facebook-runtime.js';
 import {respond as J} from './identity.js';
 import {enqueueEvents} from './automation-engine.js';
+import {transcribeIncomingVoice} from './voice-transcription.js';
 import {zernioRequest,accountUsable} from './zernio-client.js';
 const validId=id=>typeof id==='string'&&id.length>0&&id.length<=1000;
 const numeric=id=>typeof id==='string'&&/^\d{1,100}$/.test(id);
@@ -19,11 +20,12 @@ export function normalizeZernio(body,account){
   const at=Date.parse(m.sentAt);if(!Number.isFinite(at)||at<=0)return [];
   const payload=metadata.postback?.payload??metadata.quick_reply?.payload??metadata.quickReply?.payload??metadata.postbackPayload??metadata.quickReplyPayload;
   if(payload!==undefined&&(typeof payload!=='string'||!payload.trim()||payload.length>1000))return [];
+  const audio=Array.isArray(m.attachments)?m.attachments.find(a=>a?.type==='audio'&&typeof a.url==='string'):null;
   const hasAttachment=Array.isArray(m.attachments)&&m.attachments.some(a=>a&&typeof a.type==='string'&&['image','video','audio','file','share','story','reel'].includes(a.type));
   if(typeof m.text!=='string'&&payload===undefined&&!hasAttachment||typeof m.text==='string'&&m.text.length>8000)return [];
   // The signed event's platform time opens the window, never the delivery timestamp.
   const story=metadata.reply_to?.story||metadata.replyTo?.story;
-  return [{...base,key:'zernio:message:'+m.platformMessageId,kind:story?'story':'dm',sender_id:m.sender.id,text:m.text||'',conversation_id:conversation,at,...(payload!==undefined?{payload,interaction:'postback'}:hasAttachment&&!m.text?{interaction:'attachment'}:{})}];
+  return [{...base,key:'zernio:message:'+m.platformMessageId,kind:story?'story':'dm',sender_id:m.sender.id,text:m.text||'',conversation_id:conversation,at,...(payload!==undefined?{payload,interaction:'postback'}:hasAttachment&&!m.text?{interaction:'attachment'}:{}),...(audio&&!m.text?{audio_url:audio.url,audio_mime_type:audio.mimeType||null}:{})}];
  }
  return [];
 }

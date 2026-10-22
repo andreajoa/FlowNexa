@@ -6,6 +6,7 @@ export function validateFlow(trigger,scope,c){
  if(trigger.endsWith('_keyword')&&(!Array.isArray(c.keywords)||!c.keywords.length||c.keywords.length>20||c.keywords.some(x=>typeof x!=='string'||!x.trim()||x.length>80)))return{ok:false,error:'keywords_required'};
  if(scope==='selected'&&(!Array.isArray(c.media_ids)||!c.media_ids.length||c.media_ids.length>100||c.media_ids.some(x=>typeof x!=='string'||!/^\d+$/.test(x))))return{ok:false,error:'selected_media_required'};
  if(c.once_per_contact!==undefined&&typeof c.once_per_contact!=='boolean')return{ok:false,error:'invalid_once_per_contact'};
+ if(c.assistant_mode!==undefined&&c.assistant_mode!=='paul_en')return{ok:false,error:'invalid_assistant_mode'};
  if(c.entry_points!==undefined&&(!Array.isArray(c.entry_points)||!c.entry_points.length||c.entry_points.length>3||c.entry_points.some(kind=>!['comment','dm','story'].includes(kind))||new Set(c.entry_points).size!==c.entry_points.length))return{ok:false,error:'invalid_entry_points'};
  if(c.entry_points!==undefined&&!c.graph)return{ok:false,error:'engagement_graph_required'};
  if(c.opt_out_keywords!==undefined&&(!Array.isArray(c.opt_out_keywords)||c.opt_out_keywords.length>10||c.opt_out_keywords.some(word=>typeof word!=='string'||!word.trim()||word.length>80)||new Set(c.opt_out_keywords.map(word=>normalize(word).trim())).size!==c.opt_out_keywords.length))return{ok:false,error:'invalid_opt_out_keywords'};
@@ -44,8 +45,9 @@ export function normalizeWebhook(body,receivedAt=Date.now()){
    }
    const m=message.message;if(!m?.mid||typeof m.mid!=='string'||m.mid.length>500||m.is_echo||m.is_deleted)continue;
    const quick=m.quick_reply?.payload;if(m.quick_reply!==undefined&&(typeof quick!=='string'||!quick.trim()||quick.length>1000))continue;
-   if(typeof m.text!=='string'&&quick===undefined||typeof m.text==='string'&&m.text.length>8000)continue;
-   result.push({key:'message:'+m.mid,kind:m.reply_to?.story?'story':'dm',account,media_id:id(m.reply_to?.story?.id),sender_id:sender,text:m.text||'',...(quick!==undefined?{payload:quick,interaction:'quick_reply'}:{}),at:at>1e12?at:at*1000});
+   const audio=Array.isArray(m.attachments)?m.attachments.find(a=>a?.type==='audio'&&typeof a.payload?.url==='string'):null;
+   if(typeof m.text!=='string'&&quick===undefined&&!audio||typeof m.text==='string'&&m.text.length>8000)continue;
+   result.push({key:'message:'+m.mid,kind:m.reply_to?.story?'story':'dm',account,media_id:id(m.reply_to?.story?.id),sender_id:sender,text:m.text||'',...(quick!==undefined?{payload:quick,interaction:'quick_reply'}:{}),...(audio&&!m.text?{audio_url:audio.payload.url,audio_mime_type:audio.mime_type||null}:{}),at:at>1e12?at:at*1000});
   }
  }
  return result;
