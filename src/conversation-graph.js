@@ -9,7 +9,7 @@ export function validButtons(buttons){return Array.isArray(buttons)&&buttons.len
 export function validOutboundAction(action){
  if(!action||typeof action!=='object')return false;
  if(['message','private_reply','public_reply'].includes(action.type))return text(action.text,1000)&&validQuickReplies(action.quick_replies)&&action.buttons===undefined;
- if(['image','video'].includes(action.type))return safeHttpsUrl(action.url)&&action.quick_replies===undefined&&action.buttons===undefined;
+ if(['image','video','audio'].includes(action.type))return safeHttpsUrl(action.url)&&action.quick_replies===undefined&&action.buttons===undefined;
  if(action.type==='buttons')return text(action.text,80)&&validButtons(action.buttons)&&action.quick_replies===undefined;
  return false;
 }
@@ -21,7 +21,9 @@ export function validateGraph(graph){
   if(!n||!id(n.id)||nodes.has(n.id))return invalid('invalid_graph_node');
   let edges;
   if(n.type==='message'){if(!validOutboundAction(n))return invalid('invalid_graph_message');edges=[n.next];}
-  else if(['image','video'].includes(n.type)){if(!validOutboundAction(n))return invalid('invalid_graph_media');edges=[n.next];}
+  else if(['image','video','audio'].includes(n.type)){if(!validOutboundAction(n))return invalid('invalid_graph_media');edges=[n.next];}
+  else if(n.type==='transcribe_audio'){edges=[n.next];}
+  else if(n.type==='ai_reply'){if(!text(n.instructions,1200))return invalid('invalid_graph_ai_instructions');edges=[n.next];}
   else if(n.type==='buttons'){if(!validOutboundAction(n))return invalid('invalid_graph_buttons');edges=[n.next];}
   else if(n.type==='wait_reply'){if(!Number.isSafeInteger(n.timeout_seconds)||n.timeout_seconds<60||n.timeout_seconds>259200)return invalid('invalid_graph_timeout');if(n.deadline_seconds_from_start!==undefined&&(!Number.isSafeInteger(n.deadline_seconds_from_start)||n.deadline_seconds_from_start<60||n.deadline_seconds_from_start>259200))return invalid('invalid_graph_deadline');edges=[n.on_reply,n.on_timeout,...(n.on_timeout_without_window!==undefined?[n.on_timeout_without_window]:[])];}
   else if(n.type==='condition'){if(!['contains','equals'].includes(n.operator)||!text(n.value,200))return invalid('invalid_graph_condition');edges=[n.yes,n.no];}
@@ -37,7 +39,7 @@ export function validateGraph(graph){
  const visited=new Set(),active=new Set();let cycle=false;
  function visit(key){if(active.has(key)){cycle=true;return;}if(visited.has(key))return;active.add(key);for(const edge of nodes.get(key).edges)visit(edge);active.delete(key);visited.add(key);}
  visit(graph.start);if(cycle)return invalid('graph_cycle');if(visited.size!==nodes.size)return invalid('unreachable_graph_node');
- if(!['message','condition','switch'].includes(nodes.get(graph.start).node.type))return invalid('graph_must_start_with_message');
+ if(!['message','condition','switch','transcribe_audio','ai_reply'].includes(nodes.get(graph.start).node.type))return invalid('graph_must_start_with_message');
  return{ok:true};
 }
 // Alternative phrases are newline-separated. Unicode word boundaries prevent e.g. 'help' matching 'shelf'.

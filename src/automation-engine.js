@@ -6,6 +6,7 @@ import {sha} from './identity.js';
 import {matchFlow,normalizeWebhook} from './flow-runtime.js';
 import {transcribeIncomingVoice,voiceReady} from './voice-transcription.js';
 import {sendAction,messagingReady} from './meta-client.js';
+import {consumeVoiceQuota} from './voice-quotas.js';
 export async function enqueueWebhook(body,env){
  return enqueueEvents(normalizeWebhook(body),env);
 }
@@ -21,7 +22,7 @@ export async function enqueueEvents(events,env){
   if(event.audio_url){
    // Queue encrypted signed media immediately: slow speech recognition must not delay webhook acknowledgement.
    if(!voiceReady(env)||!['dm','story'].includes(event.kind))continue;
-   const eligible=await env.DB.prepare("SELECT id FROM flows WHERE account_id=? AND enabled=1 AND json_extract(configuration,'$.assistant_mode')='paul_en' LIMIT 1").bind(account.id).first();
+   const eligible=await env.DB.prepare("SELECT id FROM flows WHERE account_id=? AND enabled=1 AND (json_extract(configuration,'$.assistant_mode')='paul_en' OR EXISTS(SELECT 1 FROM json_each(configuration,'$.graph.nodes') n WHERE json_extract(n.value,'$.type')='transcribe_audio')) LIMIT 1").bind(account.id).first();
    if(!eligible)continue;
   }
   statements.push(env.DB.prepare('INSERT OR IGNORE INTO automation_events(id,account_id,workspace_id,encrypted_event,received_at,event_at,due_at) VALUES (?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),now,event.at,now));
@@ -39,6 +40,9 @@ async function processEvent(env,row,deadline){
  const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();
  if(!account||account.status!=='connected')return 'cancelled';
  if(event.audio_url){
+  // Quotas and billing are checked before any chargeable inference.
+  if(!await billingAccess(env,account.workspace_id))return 'cancelled';
+  await consumeVoiceQuota(env,account.workspace_id,'transcription');
   // Persist only the transcript after successful recognition; never route unknown audio to a canned reply.
   if(!voiceReady(env))return 'voice_unavailable';
   event.text=await transcribeIncomingVoice(event,env);
@@ -53,7 +57,9 @@ async function processEvent(env,row,deadline){
  let jobs=await env.DB.prepare('SELECT * FROM automation_jobs WHERE event_id=? ORDER BY action_index').bind(row.id).all();
  if(!jobs.results.length){
   const flows=await env.DB.prepare('SELECT * FROM flows WHERE account_id=? AND enabled=1 ORDER BY created_at,id').bind(account.id).all();
-  let flow,match;for(const f of flows.results){const m=matchFlow(f,event);if(m.matched){flow=f;match=m;break;}}
+  let flow,match;for(const f of flows.results){
+   if(event.interaction==='audio_transcribed'){let c;try{c=JSON.parse(f.configuration);}catch{continue;}if(c.assistant_mode!=='paul_en'&&!c.graph?.nodes?.some(n=>n.type==='transcribe_audio'))continue;}
+   const m=matchFlow(f,event);if(m.matched){flow=f;match=m;break;}}
   if(!flow)return 'unmatched';
   if(match.configuration.once_per_contact){
    if(!event.sender_id)return 'identity_unavailable';
