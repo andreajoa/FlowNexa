@@ -48,7 +48,11 @@ const app={async fetch(request,env,ctx={}){
  if(path==='/webhooks/stripe'&&request.method==='POST')return stripeWebhook(request,env);
  if(path.startsWith('/api/facebook/'))return facebookApi(request,env);
  if(path.startsWith('/api/billing/'))return billingApi(request,env);
- if(path==='/webhooks/zernio')return zernioWebhook(request,env);
+ if(path==='/webhooks/zernio'){
+  const response=await zernioWebhook(request,env);
+  if(response.ok&&ctx.waitUntil)ctx.waitUntil(processQueue(env).catch(()=>{}));
+  return response;
+ }
  if(path==='/webhooks/facebook')return metaFacebookWebhook(request,env);
  // The owner's own workspaces connect Instagram directly through Meta (free); customers follow the provider setting.
  if(path==='/api/instagram/zernio/callback'||path==='/api/instagram/connect'&&env.INSTAGRAM_CONNECTION_PROVIDER==='zernio'&&!await ownerExempt(env,url.searchParams.get('workspace')||''))return zernioConnection(request,env);
