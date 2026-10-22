@@ -6,7 +6,7 @@ import {sha} from './identity.js';
 import {billingAccess} from './billing.js';
 import {sendAction,messagingReady} from './meta-client.js';
 import {validateGraph,conditionMatches,switchTarget} from './conversation-graph.js';
-import {shouldUsePaul,generatePaulReply} from './paul-replies.js';
+import {shouldUsePaul,generatePaulReply,paulReady} from './paul-replies.js';
 const active="('running','waiting_reply','delayed')";
 async function lock(env,id){const lease=crypto.randomUUID(),now=Date.now();const row=await env.DB.prepare(`UPDATE conversation_sessions SET lease_id=?,lease_until=? WHERE id=? AND status IN ${active} AND (lease_until IS NULL OR lease_until<?) RETURNING *`).bind(lease,now+60000,id,now).first();if(!row){const error=Error('conversation_busy');error.retryable=true;throw error;}return row;}
 async function save(env,row,state,changes={}){
@@ -73,9 +73,18 @@ async function drive(env,row,state,deadline){
   }
   if(state.origin.kind==='comment'&&!state.sentFirst){event=state.origin;action={type:'private_reply',text:textMsg};}
   else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:['image','video'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
-  if(action.type==='message'&&env.PAUL_ASSISTANT_ENABLED==='true'&&shouldUsePaul(state.assistantMode,event,node.id)){
+  if(action.type==='message'&&event.interaction==='audio_transcribed'&&shouldUsePaul(state.assistantMode,event,node.id)&&!paulReady(env)){
+   await save(env,row,state,{status:'failed',error:'voice_reply_unavailable'});return;
+  }
+  if(action.type==='message'&&paulReady(env)&&shouldUsePaul(state.assistantMode,event,node.id)){
    // The scripted answer remains a safe fallback if the language service is unavailable.
-   try{action.text=await generatePaulReply(env,event);}catch{}
+   try{action.text=await generatePaulReply(env,event);}
+   catch{
+    if(event.interaction==='audio_transcribed'){
+     // Spoken enquiries cannot receive a generic scripted reply on a model outage.
+     await save(env,row,state,{status:'failed',error:'voice_reply_unavailable'});return;
+    }
+   }
   }
   action.source_at=event.at;
   const effect=await sha('conversation:'+row.id+':'+row.step_index),jobId=await sha('conversation-job:'+effect);

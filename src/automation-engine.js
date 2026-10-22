@@ -4,7 +4,7 @@ import {billingAccess} from './billing.js';
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {sha} from './identity.js';
 import {matchFlow,normalizeWebhook} from './flow-runtime.js';
-import {transcribeIncomingVoice} from './voice-transcription.js';
+import {transcribeIncomingVoice,voiceReady} from './voice-transcription.js';
 import {sendAction,messagingReady} from './meta-client.js';
 export async function enqueueWebhook(body,env){
  return enqueueEvents(normalizeWebhook(body),env);
@@ -19,11 +19,10 @@ export async function enqueueEvents(events,env){
   const account=accounts.get(event.account);if(!account)continue;
   const id=await sha(account.id+':'+event.key),now=Date.now();
   if(event.audio_url){
-   // Never send a generic greeting as though we understood an untranscribed recording.
-   if(env.VOICE_TRANSCRIPTION_ENABLED!=='true'||!env.OPENAI_API_KEY)continue;
-   if(await env.DB.prepare('SELECT id FROM automation_events WHERE id=?').bind(id).first())continue;
-   event.text=await transcribeIncomingVoice(event,env);
-   event.interaction='audio_transcribed';delete event.audio_url;delete event.audio_mime_type;
+   // Queue encrypted signed media immediately: slow speech recognition must not delay webhook acknowledgement.
+   if(!voiceReady(env)||!['dm','story'].includes(event.kind))continue;
+   const eligible=await env.DB.prepare("SELECT id FROM flows WHERE account_id=? AND enabled=1 AND json_extract(configuration,'$.assistant_mode')='paul_en' LIMIT 1").bind(account.id).first();
+   if(!eligible)continue;
   }
   statements.push(env.DB.prepare('INSERT OR IGNORE INTO automation_events(id,account_id,workspace_id,encrypted_event,received_at,event_at,due_at) VALUES (?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),now,event.at,now));
  }
@@ -39,6 +38,14 @@ async function processEvent(env,row,deadline){
  const event=JSON.parse(await decryptToken(row.encrypted_event,env.TOKEN_ENCRYPTION_KEY));
  const account=await env.DB.prepare('SELECT * FROM instagram_accounts WHERE id=?').bind(row.account_id).first();
  if(!account||account.status!=='connected')return 'cancelled';
+ if(event.audio_url){
+  // Persist only the transcript after successful recognition; never route unknown audio to a canned reply.
+  if(!voiceReady(env))return 'voice_unavailable';
+  event.text=await transcribeIncomingVoice(event,env);
+  event.interaction='audio_transcribed';
+  delete event.audio_url;delete event.audio_mime_type;
+  await env.DB.prepare('UPDATE automation_events SET encrypted_event=? WHERE id=? AND lease_id=?').bind(await encryptToken(JSON.stringify(event),env.TOKEN_ENCRYPTION_KEY),row.id,row.lease_id).run();
+ }
  if(await processCampaignOptOut(env,account,event,row.id))return 'opted_out';
  if(!await billingAccess(env,account.workspace_id)){await env.DB.prepare("UPDATE automation_jobs SET status='cancelled',error='billing_subscription_required',completed_at=? WHERE event_id=? AND status='pending'").bind(Date.now(),row.id).run();return 'cancelled';}
  const started=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(row.id).first();if(started)return 'conversation_started';

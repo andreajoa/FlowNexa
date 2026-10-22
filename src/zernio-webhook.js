@@ -1,7 +1,6 @@
 import {acceptFacebookWebhook} from './facebook-runtime.js';
 import {respond as J} from './identity.js';
 import {enqueueEvents} from './automation-engine.js';
-import {transcribeIncomingVoice} from './voice-transcription.js';
 import {zernioRequest,accountUsable} from './zernio-client.js';
 const validId=id=>typeof id==='string'&&id.length>0&&id.length<=1000;
 const numeric=id=>typeof id==='string'&&/^\d{1,100}$/.test(id);
@@ -25,7 +24,7 @@ export function normalizeZernio(body,account){
   if(typeof m.text!=='string'&&payload===undefined&&!hasAttachment||typeof m.text==='string'&&m.text.length>8000)return [];
   // The signed event's platform time opens the window, never the delivery timestamp.
   const story=metadata.reply_to?.story||metadata.replyTo?.story;
-  return [{...base,key:'zernio:message:'+m.platformMessageId,kind:story?'story':'dm',sender_id:m.sender.id,text:m.text||'',conversation_id:conversation,at,...(payload!==undefined?{payload,interaction:'postback'}:hasAttachment&&!m.text?{interaction:'attachment'}:{}),...(audio&&!m.text?{audio_url:audio.url,audio_mime_type:audio.mimeType||null}:{})}];
+  return [{...base,key:'zernio:message:'+m.platformMessageId,kind:story?'story':'dm',sender_id:m.sender.id,text:m.text||'',conversation_id:conversation,at,...(payload!==undefined?{payload,interaction:'postback'}:hasAttachment&&!m.text?{interaction:'attachment'}:{}),...(audio&&!m.text?{audio_url:audio.url,audio_mime_type:audio.mime_type||audio.mimeType||null}:{})}];
  }
  return [];
 }

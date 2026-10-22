@@ -33,3 +33,31 @@ test('Paul responds to content, without making up a menu',async()=>{
   const reply=await generatePaulReply({OPENAI_API_KEY:'fake-for-test',PAUL_ASSISTANT_ENABLED:'true',OPENAI_FETCH:async(url,opts)=>{const body=JSON.parse(opts.body);assert.equal(body.store,false);assert.match(body.input[1].content,/sleep/i);return Response.json({output:[{content:[{type:'output_text',text:'That sounds difficult. What tends to keep you awake?'}]}]});}},{text:'I cannot sleep.'});
   assert.match(reply,/awake/);
 });
+
+test('Vercel AI Gateway can transcribe voice without an external API key',async()=>{
+  const env={
+    VOICE_TRANSCRIPTION_ENABLED:'true',AI_GATEWAY_ENABLED:'true',
+    VOICE_MEDIA_FETCH:async()=>new Response(new Uint8Array(256),{status:200,headers:{'content-type':'audio/webm'}}),
+    VOICE_GATEWAY_TRANSCRIBE:async args=>{
+      assert.equal(args.model.modelId,'xai/grok-stt');
+      assert.equal(args.audio.byteLength,256);
+      return {text:'I would like to know more about Gilberto.'};
+    }
+  };
+  const {voiceReady}=await import('../src/voice-transcription.js');
+  assert.equal(voiceReady(env),true);
+  const transcript=await transcribeIncomingVoice({audio_url:'https://scontent.cdninstagram.com/recording.webm'},env);
+  assert.match(transcript,/Gilberto/);
+});
+test('Vercel AI Gateway can respond as Paul without an external provider key',async()=>{
+  const {paulReady}=await import('../src/paul-replies.js');
+  const env={AI_GATEWAY_ENABLED:'true',PAUL_ASSISTANT_ENABLED:'true',PAUL_GATEWAY_GENERATE:async args=>{
+    assert.equal(args.model,'openai/gpt-5-mini');
+    assert.match(args.prompt,/book/);
+    assert.match(args.system,/assistant for Gilberto/);
+    return {text:"Hey, I'm Paul. Gilberto's book is about rebuilding after betrayal. What would you like to know?"};
+  }};
+  assert.equal(paulReady(env),true);
+  const answer=await generatePaulReply(env,{text:'Can you tell me about the book?'});
+  assert.match(answer,/Gilberto/);
+});
