@@ -420,6 +420,7 @@ export const LANDING_EN = {
   "Mulher sentada em poltrona roxa, utilizando celular, com fundo transparente": "Woman in a purple armchair using a phone, transparent background",
   "R$ 59,90/mês": "$9.90/mo",
   "R$ 119,90/mês": "$24.90/mo",
+  "agora": "now",
   "beatriz.souza": "brittany.cole",
   "mariana": "megan",
   "carol": "ashley",
