@@ -1,7 +1,7 @@
 import runtime from '../src/index.js';
 import {D1Rest} from '../src/d1-rest.js';
 import {waitUntil} from '@vercel/functions';
-import {landingPage} from "../src/landing.js";
+import {landingPagePt,landingPageEn,landingClientEn} from "../src/landing-en.js";
 import {landingClient} from "../src/landing-script.js";
 // Vercel HTTP gateway: the application uses D1 through server-only credentials.
 export const config={api:{bodyParser:false}};
@@ -17,7 +17,7 @@ export default async function handler(req,res){
   return res.end("User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /webhooks/\nDisallow: /mcp\nDisallow: /app.js\nSitemap: https://flownex.online/sitemap.xml\n");
  }
  if(req.method==="GET"&&pathname==="/sitemap.xml"){
-  const urls=["/","/privacy","/terms","/data-deletion"];
+  const urls=["/","/en","/privacy","/terms","/data-deletion"];
   const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+urls.map(path=>'  <url><loc>https://flownex.online'+path+'</loc></url>').join('\n')+'\n</urlset>\n';
   res.statusCode=200;
   res.setHeader("content-type","application/xml; charset=utf-8");
@@ -25,14 +25,14 @@ export default async function handler(req,res){
   res.setHeader("x-content-type-options","nosniff");
   return res.end(sitemap);
  }
- if(req.method==="GET" && (pathname==="/"||pathname==="/landing.js")){
-  const script=pathname==="/landing.js";
+ if(req.method==="GET" && (pathname==="/"||pathname==="/landing.js"||pathname==="/en"||pathname==="/en/"||pathname==="/en/landing.js")){
+  const script=pathname.endsWith("/landing.js"),english=pathname.startsWith("/en");
   res.statusCode=200;
   res.setHeader("content-type",script?"application/javascript; charset=utf-8":"text/html; charset=utf-8");
   res.setHeader("cache-control",script?"public, max-age=300":"public, max-age=60");
   res.setHeader("x-content-type-options","nosniff");
   if(!script)res.setHeader("content-security-policy","default-src 'self'; img-src 'self' https://images.unsplash.com; script-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
-  return res.end(script?landingClient():landingPage());
+  return res.end(script?(english?landingClientEn():landingClient()):(english?landingPageEn():landingPagePt()));
  }
 
  const host=req.headers.host;
