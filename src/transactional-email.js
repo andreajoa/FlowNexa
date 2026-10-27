@@ -27,3 +27,26 @@ export async function sendIdentityEmail(env,{email,purpose,token,tokenHash,local
  } catch {throw Error('email_delivery_unavailable');}
 }
 
+
+// Trial reminder (Stripe trial_will_end, 3 days before the first charge). Plain, self-serve: cancel in the portal.
+export function trialReminderEmail({trialEnd,plan,locale='pt-BR'},env){
+ const en=locale==='en',base=new URL(env.PUBLIC_BASE_URL||'https://flownex.online');
+ const day=new Date(trialEnd*1000).toLocaleDateString(en?'en-US':'pt-BR',{day:'numeric',month:'long'});
+ const price=plan?new Intl.NumberFormat(en?'en-US':'pt-BR',{style:'currency',currency:plan.currency.toUpperCase()}).format(plan.unit_amount/100):null;
+ const link=new URL(en?'/app?lang=en#billing':'/app#billing',base).toString();
+ const subject=en?'Your FlowNexa trial ends in 3 days':'Seu teste do FlowNexa termina em 3 dias';
+ const lines=en?[`Your 7-day free trial ends on ${day}.`,price?`On that day your card will be charged ${price} for ${plan.name}.`:'On that day your card will be charged for your plan.','Want to keep your automations running? Do nothing. Prefer to stop? Cancel in one click from Billing in your dashboard, before that date, and you will not be charged.']
+  :[`Seu teste grátis de 7 dias termina em ${day}.`,price?`Nesse dia o cartão será cobrado em ${price} pelo ${plan.name}.`:'Nesse dia o cartão será cobrado pelo seu plano.','Quer manter suas automações? Não precisa fazer nada. Prefere parar? Cancele em um clique em Assinatura, no seu painel, antes dessa data, e nada será cobrado.'];
+ const button=en?'Open Billing':'Abrir Assinatura';
+ const text=`FlowNexa\n\n${lines.join('\n\n')}\n\n${button}: ${link}`;
+ const html=`<!doctype html><html lang="${en?'en':'pt-BR'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(subject)}</title></head><body style="margin:0;background:#faf9fc;color:#111016;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif"><main style="max-width:560px;margin:32px auto;background:#fff;border:2px solid #18141d;border-radius:18px;padding:28px"><p style="font-weight:900;font-size:20px;margin:0 0 18px">Flow<span style="color:#7c3ee9">Nexa</span></p>${lines.map(l=>`<p style="font-size:16px;line-height:1.6;margin:0 0 14px">${escape(l)}</p>`).join('')}<p style="margin:22px 0 0"><a href="${escape(link)}" style="display:inline-block;background:#7c3ee9;color:#fff;border-radius:12px;padding:14px 22px;font-weight:800;text-decoration:none">${escape(button)}</a></p></main></body></html>`;
+ return{subject,html,text};
+}
+export async function sendTrialReminder(env,{email,trialEnd,plan,locale,eventId}){
+ if(!env.RESEND_API_KEY)throw Error('email_configuration_missing');
+ const message=trialReminderEmail({trialEnd,plan,locale},env);
+ const response=await(env.RESEND_FETCH||fetch)('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json','idempotency-key':`flownexa-trial-${eventId}`},body:JSON.stringify({from:env.RESEND_FROM||'FlowNexa <hello@flownex.online>',to:[email],subject:message.subject,html:message.html,text:message.text})});
+ const result=await response.json();
+ if(!response.ok||typeof result.id!=='string')throw Error('email_delivery_unavailable');
+ return result.id;
+}

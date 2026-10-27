@@ -1,5 +1,7 @@
 import {commercialPlans,PLAN_TIERS} from './commercial-plans.js';
 import {getSessionUser,requireMembership,sameOrigin,payload,respond,nowSeconds,sha} from './identity.js';
+import {isZernioAccount,zernioAccountId,zernioRequest} from './zernio-client.js';
+import {sendTrialReminder} from './transactional-email.js';
 const API_VERSION='2026-08-26.dahlia';
 const terminal=new Set(['canceled','incomplete_expired']);
 const states=new Set(['active','trialing','past_due','unpaid','canceled','incomplete','incomplete_expired','paused']);
@@ -84,7 +86,7 @@ export async function billingApi(request,env){
   if(!current.checkout_request_id)await env.DB.prepare('UPDATE workspace_billing SET checkout_request_id=?,checkout_session_id=NULL,checkout_price_id=? WHERE workspace_id=? AND lease_id=?').bind(requestId,priceId,workspace,lease).run();
   else if(current.checkout_price_id!==priceId)return respond({error:'checkout_in_progress'},409);
   const suffix=requestId.replaceAll('-','').slice(0,8).split('').map(c=>String.fromCharCode(97+parseInt(c,16))).join('');
-  const session=await stripe(env,'checkout/sessions',{method:'POST',idempotencyKey:'flownexa-checkout-'+requestId,params:{mode:'subscription',ui_mode:'embedded_page',locale,customer:current.stripe_customer_id,'line_items[0][price]':priceId,'line_items[0][quantity]':'1',client_reference_id:workspace,'metadata[workspace_id]':workspace,'subscription_data[metadata][workspace_id]':workspace,return_url:base(env)+'/app?billing=return&session_id={CHECKOUT_SESSION_ID}',redirect_on_completion:'if_required',integration_identifier:'flownexa-embedded-'+suffix}});
+  const session=await stripe(env,'checkout/sessions',{method:'POST',idempotencyKey:'flownexa-checkout-'+requestId,params:{mode:'subscription',ui_mode:'embedded_page',locale,customer:current.stripe_customer_id,'line_items[0][price]':priceId,'line_items[0][quantity]':'1',client_reference_id:workspace,'metadata[workspace_id]':workspace,'subscription_data[metadata][workspace_id]':workspace,...trialParams(env,current),return_url:base(env)+'/app?billing=return&session_id={CHECKOUT_SESSION_ID}',redirect_on_completion:'if_required',integration_identifier:'flownexa-embedded-'+suffix}});
   if(!/^cs_[A-Za-z0-9_]+$/.test(session.id||'')||typeof session.client_secret!=='string'||!session.client_secret)throw error('billing_provider_unavailable');
   await env.DB.prepare('UPDATE workspace_billing SET checkout_session_id=?,updated_at=? WHERE workspace_id=? AND lease_id=?').bind(session.id,nowSeconds(),workspace,lease).run();
   return respond({client_secret:session.client_secret,publishable_key:env.STRIPE_PUBLISHABLE_KEY,session_id:session.id});
@@ -104,7 +106,7 @@ async function verifiedEvent(request,env){
  if(!/^evt_[A-Za-z0-9]+$/.test(event.id||'')||typeof event.type!=='string'||!Number.isSafeInteger(event.created)||typeof event.livemode!=='boolean')throw error('invalid_event',400);
  return{event,hash:await sha(new TextDecoder().decode(bytes))};
 }
-const events=new Set(['customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','checkout.session.completed','checkout.session.async_payment_succeeded','invoice.paid','invoice.payment_failed']);
+const events=new Set(['customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','customer.subscription.trial_will_end','checkout.session.completed','checkout.session.async_payment_succeeded','invoice.paid','invoice.payment_failed']);
 export async function stripeWebhook(request,env){
  if(request.method!=='POST')return respond({error:'method_not_allowed'},405);
  const cfg=config(env);if(!env.DB||!cfg)return respond({error:'billing_not_configured'},503);
@@ -132,6 +134,8 @@ export async function stripeWebhook(request,env){
     let apply=true;if(current.stripe_subscription_id&&current.stripe_subscription_id!==subId){const previous=await stripe(env,'subscriptions/'+encodeURIComponent(current.stripe_subscription_id));if(!terminal.has(previous.status))apply=false;}
     if(apply){const items=sub.items?.data;if(!Array.isArray(items)||items.length!==1)throw error('unsupported_subscription',502);const item=items[0],priceId=idOf(item.price),period=item.current_period_end??sub.current_period_end;if(!/^price_[A-Za-z0-9]+$/.test(priceId||'')||!Number.isSafeInteger(period)||period<0)throw error('invalid_subscription',502);
      await env.DB.prepare('UPDATE workspace_billing SET stripe_subscription_id=?,subscription_status=?,stripe_price_id=?,current_period_end=?,cancel_at_period_end=?,last_event_created=MAX(last_event_created,?),updated_at=? WHERE workspace_id=? AND lease_id=?').bind(sub.id,sub.status,priceId,period,sub.cancel_at_period_end?1:0,event.created,nowSeconds(),workspace,lease).run();
+     if(endedStates.has(sub.status)&&!await ownerExempt(env,workspace))await releaseZernio(env,workspace);
+     if(event.type==='customer.subscription.trial_will_end'&&sub.status==='trialing'&&Number.isSafeInteger(sub.trial_end))await remindTrialEnd(env,workspace,sub.trial_end,event.id);
     }
    }
   }
@@ -157,10 +161,11 @@ export async function ownerExempt(env,workspace){
  const names=listEnv(env.BILLING_EXEMPT_INSTAGRAM);if(!names.length||!env.DB)return false;
  try{return Boolean(await env.DB.prepare(`SELECT 1 FROM instagram_accounts WHERE workspace_id=? AND lower(username) IN (${names.map(()=>'?').join(',')}) LIMIT 1`).bind(workspace,...names).first());}catch{return false;}
 }
-// Free trial: full access (Teams account limit, capped messages) without a card, counted
+// Legacy card-free trial: off by default since 26/10/2026 (the trial is now 7 days inside Stripe Checkout, card
+// required, first charge on day 8). Setting BILLING_TRIAL_DAYS turns the old one back on. Counted
 // from the owner's signup so creating another workspace cannot restart it.
 export async function trialStatus(env,workspace){
- const days=Number(env.BILLING_TRIAL_DAYS??7);if(!env.DB||!workspace||!Number.isInteger(days)||days<=0)return null;
+ const days=Number(env.BILLING_TRIAL_DAYS??0);if(!env.DB||!workspace||!Number.isInteger(days)||days<=0)return null;
  const row=await env.DB.prepare('SELECT users.created_at FROM workspaces JOIN users ON users.id=workspaces.owner_id WHERE workspaces.id=?').bind(workspace).first();
  const start=typeof row?.created_at==='string'?Date.parse(row.created_at.includes('T')?row.created_at:row.created_at.replace(' ','T')+'Z'):NaN;if(!Number.isFinite(start))return null;
  const ends=start+days*86400000,left=ends-Date.now();
@@ -206,4 +211,31 @@ export async function assertMessageCapacity(env,workspace){
  // outcomes so retries and concurrent workers cannot bypass the cap.
  const usage=await messageUsage(env,workspace);
  if(usage.used>plan.messages)throw error('billing_message_limit',409);
+}
+
+// Trial inside Checkout (26/10/2026): 7 days, card collected up front, nothing charged before day 8. Only for a
+// workspace that never had a subscription, so nobody chains trials. A trial ending without a card cancels.
+export function trialParams(env,current){
+ const days=Number(env.BILLING_CHECKOUT_TRIAL_DAYS??7);
+ if(!Number.isInteger(days)||days<=0||current?.stripe_subscription_id)return{};
+ return{'subscription_data[trial_period_days]':String(days),'subscription_data[trial_settings][end_behavior][missing_payment_method]':'cancel','payment_method_collection':'always'};
+}
+// A subscription that ended or stopped paying releases its Zernio accounts, so a cancelled trial does not keep a
+// paid connected-account slot. Same path as the dashboard "disconnect": local first, provider best effort.
+const endedStates=new Set(['canceled','unpaid','incomplete_expired']);
+export async function releaseZernio(env,workspace){
+ const rows=(await env.DB.prepare("SELECT * FROM instagram_accounts WHERE workspace_id=? AND status='connected'").bind(workspace).all()).results||[];
+ for(const account of rows.filter(isZernioAccount)){
+  await env.DB.batch([env.DB.prepare('UPDATE flows SET enabled=0,version=version+1 WHERE account_id=?').bind(account.id),env.DB.prepare("UPDATE instagram_accounts SET status='disconnected',encrypted_token=NULL,token_expires_at=NULL WHERE id=?").bind(account.id)]);
+  try{await zernioRequest(env,'accounts/'+zernioAccountId(account),{method:'DELETE'});}catch{}
+ }
+ return rows.filter(isZernioAccount).length;
+}
+// Stripe sends trial_will_end 3 days before the first charge: tell the owner when and how to cancel.
+async function remindTrialEnd(env,workspace,trialEnd,eventId){
+ const owner=await env.DB.prepare("SELECT u.email FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND m.role='owner' LIMIT 1").bind(workspace).first();
+ if(!owner?.email)return;
+ const row=await env.DB.prepare('SELECT stripe_price_id FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
+ const plan=commercialPlans().find(p=>config(env)?.prices[p.id]===row?.stripe_price_id);
+ try{await sendTrialReminder(env,{email:owner.email,trialEnd,plan,locale:plan?.currency==='usd'?'en':'pt-BR',eventId});}catch{}
 }
