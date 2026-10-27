@@ -112,7 +112,6 @@ export const APP_EN = {
  "Há um bloco sem caminho a partir do início. Conecte-o ou exclua-o.": "A block can't be reached from the start. Connect it or delete it.",
  "Escolha uma mensagem, condição ou múltiplos caminhos como primeiro bloco.": "Pick a message, condition or multiple paths as the first block.",
  "Este tipo de bloco não é suportado.": "This block type isn't supported.",
- "Seu teste grátis terminou. Escolha um plano em Sua assinatura para ativar esta automação.": "Your free trial has ended. Pick a plan under Your subscription to turn on this automation.",
  "Sua assinatura está sendo atualizada. Aguarde alguns instantes e tente novamente.": "Your subscription is being updated. Wait a moment and try again.",
  "Estamos confirmando a contratação já concluída. Atualize a assinatura em instantes; não é necessário pagar novamente.": "We're confirming the purchase you already completed. Refresh your subscription in a moment; there's no need to pay again.",
  "Não foi possível consultar o serviço de pagamentos agora. Tente novamente em instantes.": "We couldn't reach the payment service right now. Try again in a moment.",
@@ -718,5 +717,6 @@ export const APP_EN = {
  "Ver detalhes": "See details",
  "Conversa publicada no Facebook.": "Conversation published on Facebook.",
  "Fluxo": "Flow",
- "Usar no Messenger": "Use in Messenger"
+ "Usar no Messenger": "Use in Messenger",
+ "Para publicar, comece seus 7 dias grátis em Sua assinatura. O cartão é pedido agora, mas nada é cobrado antes do 8º dia.": "To publish, start your 7-day free trial under Your subscription. Your card is collected now, but nothing is charged before day 8."
 };
