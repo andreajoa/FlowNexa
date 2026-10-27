@@ -182,7 +182,7 @@ engagement_graph_required:'Use o editor de nós para combinar comentários, Dire
     if(mode==='register'){workspace=field(form,'Nome do seu espaço','text','','workspace_name');workspace.maxLength=100;form.append(node('p','Enviaremos um link para confirmar seu e-mail antes do primeiro acesso.','notice'));}
     const submit=node('button',({login:'Entrar',register:'Criar conta',forgot:'Enviar link de recuperação',resend:'Reenviar confirmação',verify:'Confirmar e entrar',reset:'Salvar nova senha'})[mode]);submit.type='submit';form.append(submit);
     form.addEventListener('submit',e=>{e.preventDefault();if(!form.reportValidity())return;busy(submit,async()=>{
-      const body={};if(email)body.email=email.value.trim();if(password)body.password=password.value;if(workspace)body.workspace_name=workspace.value.trim();if(token)body.token=token;
+      const body={locale:document.documentElement.lang==='en'?'en':'pt-BR'};if(email)body.email=email.value.trim();if(password)body.password=password.value;if(workspace)body.workspace_name=workspace.value.trim();if(token)body.token=token;
       const paths={login:'login',register:'register',forgot:'forgot-password',resend:'resend-verification',verify:'verify-email',reset:'reset-password'};
       await post('/api/auth/'+paths[mode],body);
       if(mode==='login'||mode==='verify'){if(mode==='verify')history.replaceState(null,'','/app');await loadSession();notice('Você está conectado.','success');}

@@ -11,7 +11,7 @@ export function identityEmail({purpose,token,locale='en'},env){
  const language=copy[locale]?locale:'en',c=copy[language],parts=c[purpose==='verify_email'?'verify':'reset'];
  const base=new URL(env.PUBLIC_BASE_URL||'https://flownex.online');
  if(base.protocol!=='https:')throw Error('invalid_public_url');
- const link=new URL('/app',base);link.hash=new URLSearchParams({[purpose==='verify_email'?'verify':'reset']:token}).toString();
+ const link=new URL(language==='en'?'/app?lang=en':'/app',base);link.hash=new URLSearchParams({[purpose==='verify_email'?'verify':'reset']:token}).toString();
  const text=`FlowNexa\n\n${parts[1]}\n\n${parts[2]}: ${link}\n\n${c.expiry}`;
  const html=`<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escape(parts[0])}</title></head><body style="margin:0;background:#f6f7fb;color:#182033;font-family:Arial,sans-serif"><main style="max-width:560px;margin:32px auto;padding:32px;background:white;border-radius:12px"><p style="font-size:24px;font-weight:bold">FlowNexa</p><h1 style="font-size:24px">${escape(parts[0])}</h1><p>${escape(parts[1])}</p><p style="margin:32px 0"><a href="${escape(link)}" style="display:inline-block;background:#3730a3;color:white;padding:14px 22px;border-radius:6px;text-decoration:none">${escape(parts[2])}</a></p><p style="font-size:13px;color:#4b5563">${escape(c.expiry)}</p><p style="font-size:12px;overflow-wrap:anywhere">${escape(link)}</p></main></body></html>`;
  return{subject:parts[0],html,text};

@@ -55,7 +55,7 @@ export async function billingApi(request,env){
   await rowFor(env,workspace);lease=await lock(env,workspace);let current=await env.DB.prepare('SELECT * FROM workspace_billing WHERE workspace_id=?').bind(workspace).first();
   if(url.pathname==='/api/billing/portal'){
    if(!current.stripe_customer_id)return respond({error:'billing_customer_missing'},409);
-   const portal=await stripe(env,'billing_portal/sessions',{method:'POST',params:{customer:current.stripe_customer_id,return_url:base(env)+'/app?billing=portal',locale:['en','pt-BR'].includes(body.locale)?body.locale:'auto',...(/^bpc_[A-Za-z0-9]+$/.test(env.STRIPE_PORTAL_CONFIGURATION||'')?{configuration:env.STRIPE_PORTAL_CONFIGURATION}:{})}});
+   const portal=await stripe(env,'billing_portal/sessions',{method:'POST',params:{customer:current.stripe_customer_id,return_url:base(env)+(body.locale==='en'?'/app?lang=en&billing=portal':'/app?billing=portal'),locale:['en','pt-BR'].includes(body.locale)?body.locale:'auto',...(/^bpc_[A-Za-z0-9]+$/.test(env.STRIPE_PORTAL_CONFIGURATION||'')?{configuration:env.STRIPE_PORTAL_CONFIGURATION}:{})}});
    const location=new URL(portal.url);if(location.protocol!=='https:'||location.hostname!=='billing.stripe.com')throw error('billing_provider_unavailable');
    return respond({url:location.href});
   }
@@ -86,7 +86,7 @@ export async function billingApi(request,env){
   if(!current.checkout_request_id)await env.DB.prepare('UPDATE workspace_billing SET checkout_request_id=?,checkout_session_id=NULL,checkout_price_id=? WHERE workspace_id=? AND lease_id=?').bind(requestId,priceId,workspace,lease).run();
   else if(current.checkout_price_id!==priceId)return respond({error:'checkout_in_progress'},409);
   const suffix=requestId.replaceAll('-','').slice(0,8).split('').map(c=>String.fromCharCode(97+parseInt(c,16))).join('');
-  const session=await stripe(env,'checkout/sessions',{method:'POST',idempotencyKey:'flownexa-checkout-'+requestId,params:{mode:'subscription',ui_mode:'embedded_page',locale,customer:current.stripe_customer_id,'line_items[0][price]':priceId,'line_items[0][quantity]':'1',client_reference_id:workspace,'metadata[workspace_id]':workspace,'subscription_data[metadata][workspace_id]':workspace,...trialParams(env,current),return_url:base(env)+'/app?billing=return&session_id={CHECKOUT_SESSION_ID}',redirect_on_completion:'if_required',integration_identifier:'flownexa-embedded-'+suffix}});
+  const session=await stripe(env,'checkout/sessions',{method:'POST',idempotencyKey:'flownexa-checkout-'+requestId,params:{mode:'subscription',ui_mode:'embedded_page',locale,customer:current.stripe_customer_id,'line_items[0][price]':priceId,'line_items[0][quantity]':'1',client_reference_id:workspace,'metadata[workspace_id]':workspace,'subscription_data[metadata][workspace_id]':workspace,...trialParams(env,current),return_url:base(env)+(locale==='en'?'/app?lang=en&billing=return&session_id={CHECKOUT_SESSION_ID}':'/app?billing=return&session_id={CHECKOUT_SESSION_ID}'),redirect_on_completion:'if_required',integration_identifier:'flownexa-embedded-'+suffix}});
   if(!/^cs_[A-Za-z0-9_]+$/.test(session.id||'')||typeof session.client_secret!=='string'||!session.client_secret)throw error('billing_provider_unavailable');
   await env.DB.prepare('UPDATE workspace_billing SET checkout_session_id=?,updated_at=? WHERE workspace_id=? AND lease_id=?').bind(session.id,nowSeconds(),workspace,lease).run();
   return respond({client_secret:session.client_secret,publishable_key:env.STRIPE_PUBLISHABLE_KEY,session_id:session.id});

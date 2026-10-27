@@ -64,7 +64,7 @@ test('expired verification links and replayed sibling links cannot authenticate'
  await accountApi(request('/api/auth/resend-verification',{email}),env);const first=tokenFrom(sent.at(-1));await accountApi(request('/api/auth/resend-verification',{email}),env);const second=tokenFrom(sent.at(-1));assert.equal((await accountApi(request('/api/auth/verify-email',{token:first}),env)).status,200);assert.equal((await accountApi(request('/api/auth/verify-email',{token:second}),env)).status,400);
 });
 test('transactional messages support all six launch languages and never inject a supplied locale',()=>{
- for(const locale of ['pt-BR','en','de','fr','es','it']){const message=identityEmail({purpose:'reset_password',locale,token:'safe-token'},{PUBLIC_BASE_URL:'https://flownex.online'});assert.match(message.html,new RegExp('lang="'+locale+'"'));assert.match(message.text,/https:\/\/flownex.online\/app#reset=safe-token/);}
+ for(const locale of ['pt-BR','en','de','fr','es','it']){const message=identityEmail({purpose:'reset_password',locale,token:'safe-token'},{PUBLIC_BASE_URL:'https://flownex.online'});assert.match(message.html,new RegExp('lang="'+locale+'"'));assert.match(message.text,locale==='en'?/https:\/\/flownex.online\/app\?lang=en#reset=safe-token/:/https:\/\/flownex.online\/app#reset=safe-token/);}
  assert.match(identityEmail({purpose:'verify_email',locale:'"><script>',token:'safe'},{PUBLIC_BASE_URL:'https://flownex.online'}).html,/lang="en"/);
 });
 test('password hashes use versioned 600000 work factor and reject a wrong password',async()=>{const hash=await passwordHash(password);assert.match(hash,/^pbkdf2-sha256\$600000\$/);assert.equal(await verifyPassword(password,hash),true);assert.equal(await verifyPassword('different-password',hash),false);});
