@@ -1,7 +1,7 @@
 // Approved application catalog: amounts are minor units, annual plans renew once a year.
 export const PLAN_TIERS=[
- {id:'pro',name:'FlowNexa Pro',accounts:1,messages:10000,amounts:{brl:{month:5990,year:59900},usd:{month:990,year:12900}}},
- {id:'teams',name:'FlowNexa Equipes',name_en:'FlowNexa Teams',accounts:2,messages:20000,amounts:{brl:{month:11990,year:119900},usd:{month:2490,year:24900}}}
+ {id:'pro',name:'FlowNexa Pro',accounts:1,messages:10000,amounts:{brl:{month:7990,year:79900},usd:{month:1490,year:14900}}},
+ {id:'teams',name:'FlowNexa Equipes',name_en:'FlowNexa Teams',accounts:2,messages:20000,amounts:{brl:{month:15990,year:159900},usd:{month:3490,year:34900}}}
 ];
 export function commercialPlans(){return PLAN_TIERS.flatMap(tier=>['brl','usd'].flatMap(currency=>['month','year'].map(interval=>({id:`${tier.id}_${currency}_${interval}`,tier:tier.id,name:currency==='usd'?(tier.name_en||tier.name):tier.name,unit_amount:tier.amounts[currency][interval],currency,interval,interval_count:1,accounts:tier.accounts,messages:tier.messages}))));}
 export function browserBillingPreference(languages, pageLanguage='') {
