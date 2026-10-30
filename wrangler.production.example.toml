@@ -1,0 +1,20 @@
+name = "flownexa"
+main = "src/cloudflare-entry.js"
+compatibility_date = "2026-10-09"
+workers_dev = true
+
+[vars]
+APP_MODE = "production"
+MESSAGING_ENABLED = "false"
+PUBLIC_SIGNUP_ENABLED = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flownexa"
+database_id = "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Activate a cron only after production secrets, webhooks, queue recovery,
+# and the existing scheduler are reconciled. Do not run both schedulers.
+# [triggers]
+# crons = ["* * * * *"]
