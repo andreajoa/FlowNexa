@@ -11,9 +11,10 @@
   },
   "vars": {
     "APP_MODE": "production",
-    "MESSAGING_ENABLED": "false",
-    "FACEBOOK_SENDS_ENABLED": "false",
-    "PUBLIC_BASE_URL": "https://staging.flownex.online"
+    "MESSAGING_ENABLED": "true",
+    "FACEBOOK_SENDS_ENABLED": "true",
+    "PUBLIC_BASE_URL": "https://flownex.online",
+    "FACEBOOK_CHANNEL_ENABLED": "true"
   },
   "d1_databases": [
     {
@@ -28,5 +29,10 @@
     "binding": "ASSETS",
     "html_handling": "none",
     "not_found_handling": "none"
+  },
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
   }
 }
