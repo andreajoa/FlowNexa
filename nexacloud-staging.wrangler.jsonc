@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "nexacloud-flownexa-staging",
+  "main": "src/nexacloud-preview.js",
+  "compatibility_date": "2026-10-31",
+  "workers_dev": true,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    "APP_MODE": "staging",
+    "MESSAGING_ENABLED": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flownexa-migration-staging",
+      "database_id": "1fc3b213-5d74-46fc-b385-69bfd2aef523",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
