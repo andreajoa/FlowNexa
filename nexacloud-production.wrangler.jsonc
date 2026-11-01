@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "nexacloud-flownexa",
+  "main": "src/nexacloud-worker.js",
+  "compatibility_date": "2026-10-31",
+  "workers_dev": true,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "APP_MODE": "production",
+    "MESSAGING_ENABLED": "false",
+    "FACEBOOK_SENDS_ENABLED": "false",
+    "PUBLIC_BASE_URL": "https://staging.flownex.online"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flownexa",
+      "database_id": "c2500bb2-ac1f-4b6a-8973-c5557abd986c",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "none"
+  }
+}
