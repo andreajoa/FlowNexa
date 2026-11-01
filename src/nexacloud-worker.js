@@ -21,5 +21,11 @@ export default {
     return page(path.startsWith("/en")?landingClientEn():landingClient(),"application/javascript; charset=utf-8",{"cache-control":"public, max-age=300"});
   }
   return runtime.fetch(request,env,ctx);
+ },
+ // Minute trigger (enabled in the cutover config): same call the old flownexa-runner made, without leaving the Worker.
+ async scheduled(controller,env,ctx){
+  if(typeof env.CRON_SECRET!=="string"||env.CRON_SECRET.length<24)throw new Error("scheduler_configuration_missing");
+  const res=await runtime.fetch(new Request((env.PUBLIC_BASE_URL||BASE)+"/api/internal/tick",{method:"POST",headers:{authorization:"Bearer "+env.CRON_SECRET,"content-type":"application/json"},body:"{}"}),env,ctx);
+  if(!res.ok)throw new Error("scheduler_tick_http_"+res.status);
  }
 };
