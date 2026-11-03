@@ -15,7 +15,8 @@
     "MESSAGING_ENABLED": "true",
     "FACEBOOK_SENDS_ENABLED": "true",
     "PUBLIC_BASE_URL": "https://flownex.online",
-    "FACEBOOK_CHANNEL_ENABLED": "true"
+    "FACEBOOK_CHANNEL_ENABLED": "true",
+    "OPS_ALERT_EMAIL": "andremuseu@gmail.com"
   },
   "d1_databases": [
     {

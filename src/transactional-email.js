@@ -50,3 +50,13 @@ export async function sendTrialReminder(env,{email,trialEnd,plan,locale,eventId}
  if(!response.ok||typeof result.id!=='string')throw Error('email_delivery_unavailable');
  return result.id;
 }
+// Operations alert to the platform owner (OPS_ALERT_EMAIL): a customer-facing failure that needs a person.
+// Best effort: never blocks or changes the customer's response; one e-mail per reference.
+export async function sendOpsAlert(env,{subject,lines,reference}){
+ if(!env.RESEND_API_KEY||!env.OPS_ALERT_EMAIL)return false;
+ try{
+  const text=lines.filter(Boolean).join('\n');
+  const response=await(env.RESEND_FETCH||fetch)('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json','idempotency-key':`flownexa-ops-${reference}`},body:JSON.stringify({from:env.RESEND_FROM||'FlowNexa <hello@flownex.online>',to:[env.OPS_ALERT_EMAIL],subject:'[FlowNexa] '+subject,text}),signal:AbortSignal.timeout(5000)});
+  return response.ok;
+ }catch{return false;}
+}

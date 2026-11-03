@@ -1,3 +1,4 @@
+import {sendOpsAlert} from './transactional-email.js';
 import {withBillingAccountCapacity,billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,cookieToken,sha,respond as J,nowSeconds} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
@@ -13,7 +14,9 @@ export const profileIdOf=value=>typeof value==='string'?value:value?._id;
 const trustedAuthUrl=value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&['zernio.com','www.zernio.com','www.instagram.com','www.facebook.com','instagram.com'].includes(url.hostname)?url.href:null;}catch{return null;}};
 export async function zernioConnection(request,env){
  const url=new URL(request.url),callback=url.pathname==='/api/instagram/zernio/callback';
- const fail=(error,status=502)=>{
+ const fail=async(error,status=502)=>{
+  // Customers connect through Zernio: a failure here means a customer is stuck, so the owner hears about it.
+  if(error==='zernio_connection_failed'){const reference=crypto.randomUUID();console.warn(JSON.stringify({event:'zernio_connection_failed',reference}));await sendOpsAlert(env,{reference,subject:'Conexão do Instagram pelo Zernio falhou',lines:['Um cliente não conseguiu conectar o Instagram pelo Zernio.','Workspace: '+(url.searchParams.get('workspace')||'(retorno do Zernio)'),'Referência: '+reference,'','O que fazer: confira o status e o saldo da conta Zernio da FlowNexa e peça para o cliente tentar de novo.']});}
   if(callback&&request.headers.get('accept')?.includes('text/html')){const target=new URL('/app',url.origin);target.searchParams.set('error',error);return new Response(null,{status:302,headers:{location:target.href,'cache-control':'no-store','referrer-policy':'no-referrer'}});}
   return J({error},status);
  };

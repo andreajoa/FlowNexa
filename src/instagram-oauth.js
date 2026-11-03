@@ -1,6 +1,7 @@
 import {withBillingAccountCapacity,billingAccess} from './billing.js';
 import {getSessionUser,requireMembership,cookieToken} from './identity.js';
 import {zernioRequest} from './zernio-client.js';
+import {sendOpsAlert} from './transactional-email.js';
 const json=(o,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const enc=new TextEncoder();
 const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
@@ -22,12 +23,20 @@ const J=(data,status=200)=>{
  }
  return json(data,status);
 };
-let step='configuration';
-const failed=(error,response,data)=>{
+let step='configuration',alertWorkspace=null;
+const failed=async(error,response,data)=>{
  const reference=crypto.randomUUID();
+ // Standard-access app: an Instagram account without a role on the app gets a short token but no long one (code 100). Say so plainly.
+ if(step==='long_token_exchange'&&Number(data?.error?.code)===100)error='instagram_app_access_required';
  // Only allowlisted metadata is logged: never URLs, messages, secrets or provider bodies.
  const detail={event:'instagram_oauth_failed',reference,step,error,provider_status:response?.status||null,provider_code:Number.isSafeInteger(data?.error?.code)?data.error.code:null,provider_subcode:Number.isSafeInteger(data?.error?.error_subcode)?data.error.error_subcode:null,provider_trace:/^[A-Za-z0-9_-]{1,200}$/.test(data?.error?.fbtrace_id||'')?data.error.fbtrace_id:null,unsupported_get:/Unsupported request - method type: get/i.test(typeof data?.error?.message==='string'?data.error.message:'')};
  (env.OAUTH_LOG||console.warn)(JSON.stringify(detail));
+ await sendOpsAlert(env,{reference,subject:'Conexão do Instagram falhou ('+error+')',lines:[
+  'Uma conexão do Instagram falhou no FlowNexa (caminho direto pelo app próprio).',
+  'Workspace: '+(alertWorkspace||'desconhecido'),'Passo: '+step,'Erro: '+error,
+  'Resposta da Meta: HTTP '+(detail.provider_status??'-')+' · código '+(detail.provider_code??'-')+' · trace '+(detail.provider_trace??'-'),
+  'Referência: '+reference,'',
+  error==='instagram_app_access_required'?'O que fazer: a conta não tem papel no app do Instagram (acesso padrão). Adicione-a como Testadora do Instagram no app FlowNexa (Funções do app) e aceite o convite no Instagram (Configurações > Apps e sites), ou conecte o workspace pelo Zernio (workspace pagante).':'O que fazer: confira as credenciais do app do Instagram (META_APP_ID/META_APP_SECRET) e o status da Meta; peça para a pessoa tentar de novo.']});
  return J({error,reference},error==='instagram_permissions_missing'?403:502);
 };
 if(!env.DB||!env.META_APP_ID||!env.META_APP_SECRET||!env.TOKEN_ENCRYPTION_KEY)return J({error:"meta_configuration_missing"},503);
@@ -53,7 +62,7 @@ const state=url.searchParams.get("state"),code=url.searchParams.get("code");
 if(!state)return J({error:"invalid_state"},403);
 const stateHash=await hash(state+":"+cookieToken(request));
 const stateRow=await env.DB.prepare("SELECT user_id,workspace_id FROM oauth_states WHERE state_hash=? AND expires_at>?").bind(stateHash,Math.floor(Date.now()/1000)).first();
-if(!stateRow||stateRow.user_id!==user.id)return J({error:"invalid_state"},403);
+if(!stateRow||stateRow.user_id!==user.id)return J({error:"invalid_state"},403);alertWorkspace=stateRow.workspace_id;
 if(!await requireMembership(env.DB,user.id,stateRow.workspace_id,["owner","admin"]))return J({error:"forbidden"},403);
 const del=await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash=? AND expires_at>?").bind(stateHash,Math.floor(Date.now()/1000)).run();if(!del.meta.changes)return J({error:"state_used"},403);
 if(url.searchParams.has("error")||!code)return J({error:"authorization_declined"},400);

@@ -699,6 +699,7 @@ export const APP_EN = {
  "Simulação concluída.": "Simulation complete.",
  "Você saiu da sua conta.": "You've logged out.",
  " Referência para suporte: ": " Support reference: ",
+ "Esta conta do Instagram ainda não foi liberada no aplicativo do FlowNexa. Nossa equipe já foi avisada e libera o acesso; depois é só tentar de novo.": "This Instagram account has not been enabled in the FlowNexa app yet. Our team has been notified and will enable it; then just try again.",
  "Começar 7 dias grátis": "Start 7-day free trial",
  "Preencha os detalhes do modelo com até 500 caracteres.": "Fill in the template details, up to 500 characters.",
  "Aguardar os detalhes": "Wait for the details",

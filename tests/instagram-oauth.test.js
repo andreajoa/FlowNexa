@@ -100,7 +100,7 @@ test('provider failures emit only safe stage metadata with a support reference',
 test('exchange rejection with real Meta code100 is classified without reaching profile',async t=>{
  const{env,db,callback,calls}=await setup(t);const fetcher=env.META_FETCH,logs=[];env.OAUTH_LOG=line=>logs.push(JSON.parse(line));
  env.META_FETCH=(url,options)=>new URL(url).pathname==='/access_token'?Promise.resolve(Response.json({error:{message:'Unsupported request - method type: get',type:'IGApiException',code:100,fbtrace_id:'trace-fixture'}},{status:400})):fetcher(url,options);
- const result=await callback();assert.equal(result.status,502);assert.equal((await result.json()).error,'long_token_exchange_failed');assert.equal(logs[0].provider_code,100);assert.equal(logs[0].step,'long_token_exchange');assert.equal(logs[0].unsupported_get,true);assert.equal((await db.prepare('SELECT count(*) n FROM instagram_accounts').first()).n,0);
+ const alerts=[];env.RESEND_API_KEY='re_test';env.OPS_ALERT_EMAIL='ops@example.com';env.RESEND_FETCH=async(u,o)=>{alerts.push(JSON.parse(o.body));return Response.json({id:'x'});};const result=await callback();assert.equal(result.status,502);assert.equal((await result.json()).error,'instagram_app_access_required');assert.equal(alerts.length,1);assert.match(alerts[0].text,/Testadora do Instagram/);assert.deepEqual(alerts[0].to,['ops@example.com']);assert.equal(logs[0].provider_code,100);assert.equal(logs[0].step,'long_token_exchange');assert.equal(logs[0].unsupported_get,true);assert.equal((await db.prepare('SELECT count(*) n FROM instagram_accounts').first()).n,0);
 });
 test('direct reconnect of a Zernio profile moves its flows and releases the Zernio connection',async t=>{
  const{db,env,callback}=await setup(t);const released=[];
