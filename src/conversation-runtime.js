@@ -1,3 +1,4 @@
+import {loadMemory,remember,transcript} from './contact-memory.js';
 import {accountUsable} from './zernio-client.js';
 import {campaignSuppressed} from './campaign-opt-out.js';
 import {isOptOut} from './flow-runtime.js';
@@ -39,6 +40,7 @@ async function drive(env,row,state,deadline){
    await save(env,row,state,{node_id:node.next,status:'running',step_index:row.step_index+1});continue;
   }
   if(node.type==='end'){await save(env,row,state,{status:'completed',error:null});return;}
+  if(node.type==='condition'&&node.operator==='returning_contact'){await save(env,row,state,{node_id:state.isReturning?node.yes:node.no,step_index:row.step_index+1});continue;}
   if(node.type==='condition'){await save(env,row,state,{node_id:conditionMatches(node,state.replyText,state.replyPayload)?node.yes:node.no,step_index:row.step_index+1});continue;}
   if(node.type==='switch'){await save(env,row,state,{node_id:switchTarget(node,state.replyText,state.replyPayload),step_index:row.step_index+1});continue;}
   if(node.type==='wait_reply'){
@@ -46,7 +48,7 @@ async function drive(env,row,state,deadline){
    // A reply may already be durable while recovering an accepted message's cursor write.
    // Select its original encrypted event, not a later message that merely refreshed the window.
    const pending=await env.DB.prepare('SELECT e.encrypted_event FROM conversation_inbound i JOIN automation_events e ON e.id=i.event_id WHERE i.conversation_id=? AND e.event_at>=? AND e.event_at>? AND e.event_at<=? ORDER BY i.received_at,i.rowid LIMIT 1').bind(row.id,state.waitingSince,state.waitingInboundAt,node.deadline_seconds_from_start===undefined?Number.MAX_SAFE_INTEGER:row.created_at+node.deadline_seconds_from_start*1000).first();
-   if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;state.replyPayload=reply.payload||null;await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
+   if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;state.replyPayload=reply.payload||null;await remember(env,row.account_id,row.recipient_hash,'user',reply.text||reply.payload||'');await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
    const dueAt=Math.min(state.waitingSince+node.timeout_seconds*1000,node.deadline_seconds_from_start===undefined?Infinity:row.created_at+node.deadline_seconds_from_start*1000);
    await save(env,row,state,{status:'waiting_reply',due_at:dueAt});return;
   }
@@ -63,6 +65,7 @@ async function drive(env,row,state,deadline){
    }
   }
   let textMsg=node.text;
+  if(node.id!=='welcome'&&state.isReturning&&node.text_returning)textMsg=node.text_returning;
   if(node.id==='welcome'){
    if(state.isReturning&&node.text_returning)textMsg=node.text_returning;
    else if(state.isReturning){
@@ -78,7 +81,7 @@ async function drive(env,row,state,deadline){
   else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:node.type==='ai_reply'?{type:'message',text:''}:['image','video','audio'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
   if(node.type==='ai_reply'&&action.type==='message'){
    if(!['dm','story'].includes(event.kind)){await save(env,row,state,{status:'failed',error:'ai_reply_requires_inbound_dm'});return;}
-   try{await consumeVoiceQuota(env,row.workspace_id,'ai_reply');action.text=await cloudflareWorkspaceReply(env,node.instructions,event.text||'');}
+   try{await consumeVoiceQuota(env,row.workspace_id,'ai_reply');const latest=state.replyText||event.text||'',history=(await loadMemory(env,row.account_id,row.recipient_hash)).filter((h,i,a)=>!(i===a.length-1&&h.role==='user'&&h.text===latest.trim()));const previous=transcript(history);action.text=await cloudflareWorkspaceReply(env,node.instructions,(previous?'Conversa anterior com esta pessoa (mais antiga primeiro):\n'+previous+'\n\n':'')+'Mensagem atual da pessoa: '+latest);}
    catch(error){
     // An AI outage must not leave the person without an answer: log it and continue to the next step (usually the buttons).
     console.warn(JSON.stringify({event:'ai_reply_failed',workspace_id:row.workspace_id,flow_id:row.flow_id,error:String(error?.message||error).slice(0,120)}));
@@ -115,6 +118,7 @@ async function drive(env,row,state,deadline){
   try{
    const provider=await sendAction(env,current,event,action);
    acceptedAt=Date.now();
+   await remember(env,row.account_id,row.recipient_hash,'assistant',action.text||'');
    try{await env.DB.prepare("UPDATE automation_jobs SET status='accepted',provider_id=?,completed_at=?,error=NULL WHERE id=? AND status='sending'").bind(provider,acceptedAt,jobId).run();}catch{throw Error('delivery_unknown');}
   }catch(error){
    if(error.deferred){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='processing_deferred' WHERE id=?").bind(jobId).run();await save(env,row,state,{due_at:Date.now()+2000});return;}
@@ -139,6 +143,7 @@ export async function startConversation(env,account,flow,event,eventId){
  const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,assistantMode:c.assistant_mode||null,replyPerMessage:c.reply_per_message===true,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,recipient,eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
  if(!inserted.meta.changes&&c.reply_per_message){const error=Error('conversation_busy');error.deferred=true;throw error;}
+ if(inserted.meta.changes)await remember(env,account.id,recipient,'user',(event.kind==='comment'?'(comentou num post) ':'')+(event.text||event.payload||''));
  return inserted.meta.changes?'conversation_started':'conversation_already_active';
 }
 export async function resumeConversation(env,account,event,eventId){
