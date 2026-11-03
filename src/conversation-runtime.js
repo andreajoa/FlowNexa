@@ -1,3 +1,4 @@
+import {contactForInstagram,otherChannelHistory} from './contacts.js';
 import {loadMemory,remember,transcript} from './contact-memory.js';
 import {accountUsable} from './zernio-client.js';
 import {campaignSuppressed} from './campaign-opt-out.js';
@@ -81,7 +82,7 @@ async function drive(env,row,state,deadline){
   else{event=state.inbound;if(!event||Date.now()-event.at>86400000){await save(env,row,state,{status:'completed',error:'message_window_expired'});return;}action=node.type==='message'?{type:'message',text:textMsg,...(node.quick_replies?{quick_replies:node.quick_replies}:{})}:node.type==='ai_reply'?{type:'message',text:''}:['image','video','audio'].includes(node.type)?{type:node.type,url:node.url}:{type:'buttons',text:node.text,buttons:node.buttons};}
   if(node.type==='ai_reply'&&action.type==='message'){
    if(!['dm','story'].includes(event.kind)){await save(env,row,state,{status:'failed',error:'ai_reply_requires_inbound_dm'});return;}
-   try{await consumeVoiceQuota(env,row.workspace_id,'ai_reply');const latest=state.replyText||event.text||'',history=(await loadMemory(env,row.account_id,row.recipient_hash)).filter((h,i,a)=>!(i===a.length-1&&h.role==='user'&&h.text===latest.trim()));const previous=transcript(history);action.text=await cloudflareWorkspaceReply(env,node.instructions,(previous?'Conversa anterior com esta pessoa (mais antiga primeiro):\n'+previous+'\n\n':'')+'Mensagem atual da pessoa: '+latest);}
+   try{await consumeVoiceQuota(env,row.workspace_id,'ai_reply');const latest=state.replyText||event.text||'',other=await otherChannelHistory(env,row.workspace_id,row.recipient_hash),history=[...other.events,...(await loadMemory(env,row.account_id,row.recipient_hash))].sort((a,b)=>a.at-b.at).filter((h,i,a)=>!(i===a.length-1&&h.role==='user'&&h.text===latest.trim()));const previous=transcript(history);action.text=await cloudflareWorkspaceReply(env,node.instructions,(other.profile?.name?'Nome da pessoa: '+other.profile.name+'\n':'')+(previous?'Conversa anterior com esta pessoa, em todos os canais (mais antiga primeiro):\n'+previous+'\n\n':'')+'Mensagem atual da pessoa: '+latest);}
    catch(error){
     // An AI outage must not leave the person without an answer: log it and continue to the next step (usually the buttons).
     console.warn(JSON.stringify({event:'ai_reply_failed',workspace_id:row.workspace_id,flow_id:row.flow_id,error:String(error?.message||error).slice(0,120)}));
@@ -139,7 +140,9 @@ export async function startConversation(env,account,flow,event,eventId){
  const prior=await env.DB.prepare('SELECT id FROM conversation_sessions WHERE origin_event_id=?').bind(eventId).first();if(prior)return'conversation_started';
  const recipient=await sha(event.sender_id);
  const priorSession=await env.DB.prepare("SELECT id,node_id,status,encrypted_state,updated_at FROM conversation_sessions WHERE account_id=? AND recipient_hash=? ORDER BY updated_at DESC LIMIT 1").bind(account.id,recipient).first();
- const isReturning=Boolean(priorSession);
+ let isReturning=Boolean(priorSession);
+ // Someone who already wrote through the website form (or another channel) is not a stranger here either.
+ if(['dm','story'].includes(event.kind)&&await contactForInstagram(env,account,event.sender_id,recipient)){const other=await otherChannelHistory(env,account.workspace_id,recipient);if(other.events.length)isReturning=true;}
  const now=Date.now(),id=crypto.randomUUID(),state={graph:c.graph,assistantMode:c.assistant_mode||null,replyPerMessage:c.reply_per_message===true,origin:event,inbound:['dm','story'].includes(event.kind)?event:null,replyText:event.text||'',replyPayload:event.payload||null,opt_out_keywords:c.opt_out_keywords||[],sentFirst:false,isReturning,priorNodeId:priorSession?.node_id||null};
  const inserted=await env.DB.prepare('INSERT OR IGNORE INTO conversation_sessions(id,account_id,workspace_id,flow_id,flow_version,recipient_hash,origin_event_id,encrypted_state,node_id,due_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,account.id,account.workspace_id,flow.id,flow.version,recipient,eventId,await encryptToken(JSON.stringify(state),env.TOKEN_ENCRYPTION_KEY),c.graph.start,now,now,now).run();
  if(!inserted.meta.changes&&c.reply_per_message){const error=Error('conversation_busy');error.deferred=true;throw error;}

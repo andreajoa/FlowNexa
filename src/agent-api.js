@@ -1,3 +1,4 @@
+import {recordLead} from './contacts.js';
 import {accountUsable, isZernioAccount, zernioMedia} from './zernio-client.js';
 import {respond as J, sha, nowSeconds, getSessionUser, requireMembership, payload, sameOrigin} from './identity.js';
 import {validateGraph} from './conversation-graph.js';
@@ -248,6 +249,13 @@ export async function agentRuntimeApi(request, env) {
  }
 
  // Creates a draft flow (same validation as the panel); publishing stays a separate, explicit step.
+ if (path === '/api/v1/agent/leads' && request.method === 'POST') {
+  // Website form (or other channel) contact: joins the person's contact by e-mail, phone or Instagram @.
+  const b = await request.json().catch(() => null);
+  if (!b || typeof b !== 'object') return J({error: 'invalid_json'}, 400);
+  try { return J(await recordLead(env, agent.workspaceId, b), 201); }
+  catch (e) { return J({error: e.message === 'lead_identity_required' ? 'lead_identity_required' : 'lead_not_saved'}, 400); }
+ }
  if (path === '/api/v1/agent/flows' && request.method === 'POST') {
   if (!agent.scopes.includes('flows:write') && !agent.scopes.includes('flows:all')) return J({error: 'insufficient_scope'}, 403);
   const b = await payload(request, 64000);
