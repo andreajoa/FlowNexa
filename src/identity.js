@@ -1,3 +1,4 @@
+import {pbkdf2Sha256} from './pbkdf2.js';
 const enc=new TextEncoder();
 const hex=buf=>Array.from(new Uint8Array(buf),x=>x.toString(16).padStart(2,'0')).join('');
 export const nowSeconds=()=>Math.floor(Date.now()/1000);
@@ -5,8 +6,12 @@ export const sha=async value=>hex(await crypto.subtle.digest('SHA-256',enc.encod
 export const respond=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 // Vercel Node uses 600000 PBKDF2-SHA256 iterations; retain explicit legacy versions.
 // Versioned hashes allow future work-factor upgrades without guessing old parameters.
-async function derive(password,salt,iterations){const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);return hex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations,hash:'SHA-256'},key,256));}
-export async function passwordHash(password,salt=crypto.randomUUID()){return `pbkdf2-sha256$600000$${salt}$${await derive(password,salt,600000)}`;}
+// Workers' WebCrypto refuses PBKDF2 above 100000 iterations, so older 600000/210000 hashes (made on Vercel/Node) are checked in JavaScript
+// and rewritten at 100000 on the next successful sign-in (see auth.js).
+export const NATIVE_PBKDF2_MAX=100000;
+async function derive(password,salt,iterations){if(iterations>NATIVE_PBKDF2_MAX)return pbkdf2Sha256(password,salt,iterations);const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);return hex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations,hash:'SHA-256'},key,256));}
+export async function passwordHash(password,salt=crypto.randomUUID()){return `pbkdf2-sha256$${NATIVE_PBKDF2_MAX}$${salt}$${await derive(password,salt,NATIVE_PBKDF2_MAX)}`;}
+export const needsRehash=stored=>typeof stored==='string'&&!stored.startsWith(`pbkdf2-sha256$${NATIVE_PBKDF2_MAX}$`);
 export async function verifyPassword(password,stored){
  if(typeof stored!=='string')return false;
  let computed;

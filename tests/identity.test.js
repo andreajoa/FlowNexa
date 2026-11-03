@@ -67,7 +67,7 @@ test('transactional messages support all six launch languages and never inject a
  for(const locale of ['pt-BR','en','de','fr','es','it']){const message=identityEmail({purpose:'reset_password',locale,token:'safe-token'},{PUBLIC_BASE_URL:'https://flownex.online'});assert.match(message.html,new RegExp('lang="'+locale+'"'));assert.match(message.text,locale==='en'?/https:\/\/flownex.online\/app\?lang=en#reset=safe-token/:/https:\/\/flownex.online\/app#reset=safe-token/);}
  assert.match(identityEmail({purpose:'verify_email',locale:'"><script>',token:'safe'},{PUBLIC_BASE_URL:'https://flownex.online'}).html,/lang="en"/);
 });
-test('password hashes use versioned 600000 work factor and reject a wrong password',async()=>{const hash=await passwordHash(password);assert.match(hash,/^pbkdf2-sha256\$600000\$/);assert.equal(await verifyPassword(password,hash),true);assert.equal(await verifyPassword('different-password',hash),false);});
+test('password hashes use the versioned Workers-native 100000 work factor and reject a wrong password',async()=>{const hash=await passwordHash(password);assert.match(hash,/^pbkdf2-sha256\$100000\$/);assert.equal(await verifyPassword(password,hash),true);assert.equal(await verifyPassword('different-password',hash),false);});
 
 test('legacy 100000 versioned and 210000 unversioned hashes remain verifiable',async()=>{
  const salt='identity-legacy-test-salt';

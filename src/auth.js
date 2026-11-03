@@ -1,4 +1,4 @@
-import {respond,passwordHash,verifyPassword,getSessionUser,requireMembership,cookieToken,sessionFor,withCookie,sameOrigin,payload,rateLimit,sha,nowSeconds} from './identity.js';
+import {needsRehash,respond,passwordHash,verifyPassword,getSessionUser,requireMembership,cookieToken,sessionFor,withCookie,sameOrigin,payload,rateLimit,sha,nowSeconds} from './identity.js';
 import {sendIdentityEmail} from './transactional-email.js';
 export {passwordHash,verifyPassword} from './identity.js';
 const normalizedEmail=value=>typeof value==='string'?value.trim().toLowerCase():'';
@@ -43,8 +43,10 @@ export async function accountApi(request,env){
    if(!validEmail(email)||!validPassword(b.password))return respond({error:'invalid_credentials'},401);
    const user=await env.DB.prepare('SELECT id,email,password_hash,email_verified_at FROM users WHERE email=?').bind(email).first();
    // Perform the same PBKDF2 work for unknown addresses to reduce account enumeration.
-   const valid=await verifyPassword(b.password,user?.password_hash||'pbkdf2-sha256$600000$flownexa-dummy-salt$'+ '0'.repeat(64));
+   const valid=await verifyPassword(b.password,user?.password_hash||'pbkdf2-sha256$100000$flownexa-dummy-salt$'+ '0'.repeat(64));
    if(!user||!valid)return respond({error:'invalid_credentials'},401);
+   // Older hashes need the slow JavaScript path; rewrite them in the fast format once the password is known to be right.
+   if(needsRehash(user.password_hash))await env.DB.prepare('UPDATE users SET password_hash=? WHERE id=? AND password_hash=?').bind(await passwordHash(b.password),user.id,user.password_hash).run().catch(()=>{});
    if(!user.email_verified_at)return respond({error:'email_verification_required'},403);
    return withCookie(respond({user:{id:user.id,email:user.email,email_verified_at:user.email_verified_at}}),await sessionFor(user.id,env));
   }
