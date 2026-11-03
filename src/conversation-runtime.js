@@ -79,7 +79,12 @@ async function drive(env,row,state,deadline){
   if(node.type==='ai_reply'&&action.type==='message'){
    if(!['dm','story'].includes(event.kind)){await save(env,row,state,{status:'failed',error:'ai_reply_requires_inbound_dm'});return;}
    try{await consumeVoiceQuota(env,row.workspace_id,'ai_reply');action.text=await cloudflareWorkspaceReply(env,node.instructions,event.text||'');}
-   catch{await save(env,row,state,{status:'failed',error:'workspace_reply_unavailable'});return;}
+   catch(error){
+    // An AI outage must not leave the person without an answer: log it and continue to the next step (usually the buttons).
+    console.warn(JSON.stringify({event:'ai_reply_failed',workspace_id:row.workspace_id,flow_id:row.flow_id,error:String(error?.message||error).slice(0,120)}));
+    if(node.next){await save(env,row,state,{node_id:node.next,status:'running',step_index:row.step_index+1,error:'ai_reply_skipped'});continue;}
+    await save(env,row,state,{status:'failed',error:'workspace_reply_unavailable'});return;
+   }
   }
   if(node.type!=='ai_reply'&&action.type==='message'&&event.interaction==='audio_transcribed'&&shouldUsePaul(state.assistantMode,event,node.id)&&!paulReady(env)){
    await save(env,row,state,{status:'failed',error:'voice_reply_unavailable'});return;
