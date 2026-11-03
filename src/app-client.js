@@ -118,7 +118,9 @@ engagement_graph_required:'Use o editor de nós para combinar comentários, Dire
     email_configuration_required:'O envio de e-mails ainda está sendo configurado. Tente novamente depois.', mail_unavailable:'Não foi possível enviar o e-mail agora. Tente novamente em instantes.'
   };
   function node(tag, text, cls) { const n=document.createElement(tag); if(text!==undefined)n.textContent=text; if(cls)n.className=cls; return n; }
-  function notice(message, kind='') { const n=$('notice'); n.textContent=message; n.className='status '+kind; n.hidden=!message; }
+  function notice(message, kind='') { const n=$('notice'); n.textContent=message; n.className='status '+kind; n.hidden=!message;
+   // A subscription notice comes with the way forward: one click to the plans (and straight to card entry when there is one plan).
+   if(message&&message===errors.billing_subscription_required){const go=node('button','Começar 7 dias grátis');go.type='button';go.style.marginLeft='10px';go.addEventListener('click',()=>{$('billing').scrollIntoView({behavior:'smooth',block:'start'});const plans=[...$('billing-plans').querySelectorAll('button:not([disabled]):not(.secondary)')];if(plans.length===1)plans[0].click();else if(plans[0])plans[0].focus();});n.append(' ',go);} }
   async function api(path, options={}) {
     let r; try { r=await fetch(path,{credentials:'same-origin',...options,headers:{'content-type':'application/json',...options.headers}}); } catch { throw Error('Sem conexão com o servidor. Verifique sua internet e tente novamente.'); }
     let data; try { data=await r.json(); } catch { throw Error('O servidor não respondeu como esperado. Tente novamente.'); }

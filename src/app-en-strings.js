@@ -699,6 +699,7 @@ export const APP_EN = {
  "Simulação concluída.": "Simulation complete.",
  "Você saiu da sua conta.": "You've logged out.",
  " Referência para suporte: ": " Support reference: ",
+ "Começar 7 dias grátis": "Start 7-day free trial",
  "Preencha os detalhes do modelo com até 500 caracteres.": "Fill in the template details, up to 500 characters.",
  "Aguardar os detalhes": "Wait for the details",
  "Qualificar um interessado": "Qualify a lead",
