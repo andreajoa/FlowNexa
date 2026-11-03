@@ -8,7 +8,8 @@ export async function metaRequest(env,account,path,{method='GET',body}={}){
  const remaining=env.RUNTIME_DEADLINE_MS?env.RUNTIME_DEADLINE_MS-Date.now()-1500:30000;
  if(remaining<1000){const error=Error('processing_deferred');error.deferred=true;error.retryable=true;throw error;}
  if(account.status!=='connected'||account.token_expires_at<=Date.now()/1000)throw Error('account_reconnect_required');
- const token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);
+ // A token that no longer opens (encryption key changed) needs the owner to reconnect; say so instead of a generic rejection.
+ let token;try{token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);}catch{throw Error('account_reconnect_required');}
  const version=env.META_API_VERSION||'v24.0';if(!/^v\d+\.0$/.test(version))throw Error('invalid_meta_version');
  const url=new URL(`https://graph.instagram.com/${version}/${path}`);
  const headers={'authorization':'Bearer '+token};if(body)headers['content-type']='application/json';

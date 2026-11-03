@@ -19,7 +19,7 @@ export async function refreshAccounts(env){
   summary.checked++;
   try{
    if(account.token_expires_at<=now){if(await requireReconnect(env,account))summary.reconnect_required++;else summary.skipped++;continue;}
-   const token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);
+   let token;try{token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);}catch{if(await requireReconnect(env,account))summary.reconnect_required++;else summary.skipped++;continue;}
    const url=new URL('https://graph.instagram.com/refresh_access_token');
    url.search=new URLSearchParams({grant_type:'ig_refresh_token',access_token:token}).toString();
    const response=await(env.META_FETCH||fetch)(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000)});

@@ -78,7 +78,8 @@ export function publicationConflicts(candidate, flows){
     return (existing.keywords||[]).some(word=>(incoming.keywords||[]).some(other=>{const a=normalize(word),b=normalize(other);return a&&b&&(a.includes(b)||b.includes(a));}));
   });
 }
-export function appClient() { return `(${boot.toString()})(${JSON.stringify(APP_TEMPLATES)},${prepareTemplate.toString()},${conversationTemplate.toString()},(function(){const phraseMatches=${phraseMatches.toString()};const conditionMatches=${conditionMatches.toString()};const switchTarget=${switchTarget.toString()};return ${previewConversation.toString()};})(),${publicationConflicts.toString()},${JSON.stringify(CONVERSATION_TEMPLATES)},${browserBillingPreference.toString()},${planDisplay.toString()},${createFacebookClient.toString()});`; }
+// Functions are sent to the browser as text; bundlers (esbuild keep-names on Workers) add __name(...) calls the browser does not have.
+export function appClient() { return `var __name=globalThis.__name||(f=>f);(${boot.toString()})(${JSON.stringify(APP_TEMPLATES)},${prepareTemplate.toString()},${conversationTemplate.toString()},(function(){const phraseMatches=${phraseMatches.toString()};const conditionMatches=${conditionMatches.toString()};const switchTarget=${switchTarget.toString()};return ${previewConversation.toString()};})(),${publicationConflicts.toString()},${JSON.stringify(CONVERSATION_TEMPLATES)},${browserBillingPreference.toString()},${planDisplay.toString()},${createFacebookClient.toString()});`; }
 function boot(templates, prepareTemplate, conversationTemplate, previewConversation, publicationConflicts, conversationTemplates,browserBillingPreference,planDisplay,createFacebookClient) {
   'use strict';
   const $ = id => document.getElementById(id);

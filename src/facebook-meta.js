@@ -58,7 +58,7 @@ export async function subscribeMetaPage(env,page){
 
 export async function sealPages(env,pages){return encryptToken(JSON.stringify(pages),env.TOKEN_ENCRYPTION_KEY);}
 export async function openPages(env,sealed){return JSON.parse(await decryptToken(sealed,env.TOKEN_ENCRYPTION_KEY));}
-export async function pageToken(env,account){return decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);}
+export async function pageToken(env,account){try{return await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);}catch{throw Error('account_reconnect_required');}}
 
 export async function verifyMetaSignature(raw,header,secret){
  if(!secret||typeof header!=='string'||!header.startsWith('sha256='))return false;

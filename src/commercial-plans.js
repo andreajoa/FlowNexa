@@ -12,7 +12,7 @@ export function planDisplay(plan,locale='pt-BR'){
  const money=amount=>new Intl.NumberFormat(locale,{style:'currency',currency:plan.currency.toUpperCase()}).format(amount/100);
  return{price:money(plan.unit_amount),monthly_equivalent:plan.interval==='year'?money(plan.unit_amount/12):money(plan.unit_amount)};
 }
-export function pricingClient(){return `(${pricingBoot.toString()})(${JSON.stringify(commercialPlans())},${browserBillingPreference.toString()},${planDisplay.toString()});`;}
+export function pricingClient(){return `var __name=globalThis.__name||(f=>f);(${pricingBoot.toString()})(${JSON.stringify(commercialPlans())},${browserBillingPreference.toString()},${planDisplay.toString()});`;}
 function pricingBoot(plans,browserBillingPreference,planDisplay){
  const section=document.getElementById('precos');if(!section)return;
  let pref=browserBillingPreference(navigator.languages||[navigator.language],document.documentElement.lang);let currency=pref.currency,interval='month';

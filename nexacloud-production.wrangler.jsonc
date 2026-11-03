@@ -6,6 +6,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "send_metrics": false,
+  "keep_names": false,
   "observability": {
     "enabled": true
   },
