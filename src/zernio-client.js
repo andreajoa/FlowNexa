@@ -9,7 +9,7 @@ export async function zernioRequest(env,path,{method='GET',body}={}){
  const url=new URL('https://zernio.com/api/v1/'+path);
  if(url.origin!=='https://zernio.com'||!url.pathname.startsWith('/api/v1/'))throw Error('invalid_provider_path');
  let response;
- try{response=await(env.ZERNIO_FETCH||fetch)(url,{method,headers:{authorization:'Bearer '+env.ZERNIO_API_KEY,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(Math.min(15000,remaining))});}
+ try{response=await(env.ZERNIO_FETCH||fetch)(url,{method,headers:{authorization:'Bearer '+env.ZERNIO_API_KEY,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(Math.min(15000,remaining))});}
  catch{throw Object.assign(Error(method==='GET'?'zernio_unavailable':'delivery_unknown'),{retryable:method==='GET'});}
  const data=await response.json().catch(()=>null);
  if(!response.ok){

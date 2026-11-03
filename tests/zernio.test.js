@@ -95,7 +95,7 @@ test('media uses Zernio and local disconnect disables automations before remote 
  assert.equal((await runtime.fetch(request('/api/accounts/'+account.id+'/disconnect','POST'),env)).status,200);assert.equal((await db.prepare('SELECT status FROM instagram_accounts').first()).status,'disconnected');assert.ok(calls.some(c=>c.options.method==='DELETE'));
 });
 test('provider transport never follows redirects and never exposes upstream secret messages',async()=>{
- let options;await assert.rejects(zernioRequest({ZERNIO_API_KEY:'key',ZERNIO_FETCH:async(u,o)=>{options=o;return Response.json({error:'private-token'},{status:401});}},'accounts'),error=>error.message==='zernio_request_rejected'&&!error.message.includes('private-token'));assert.equal(options.redirect,'error');
+ let options;await assert.rejects(zernioRequest({ZERNIO_API_KEY:'key',ZERNIO_FETCH:async(u,o)=>{options=o;return Response.json({error:'private-token'},{status:401});}},'accounts'),error=>error.message==='zernio_request_rejected'&&!error.message.includes('private-token'));assert.equal(options.redirect,'manual');
 });
 
 test('callback state cannot be used by a second session of the same user',async t=>{

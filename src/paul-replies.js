@@ -21,7 +21,7 @@ export async function generatePaulReply(env,event){
   if(freeOnly(env)||cloudflareConfigured(env)){
     answer=await cloudflarePaul(env,rules,prompt);
   }else if(env.OPENAI_API_KEY){
-    const result=await(env.OPENAI_FETCH||fetch)('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:'Bearer '+env.OPENAI_API_KEY,'content-type':'application/json'},body:JSON.stringify({model:env.PAUL_ASSISTANT_MODEL||'gpt-5-mini',store:false,max_output_tokens:250,input:[{role:'developer',content:rules},{role:'user',content:prompt}]}),redirect:'error',signal:AbortSignal.timeout(12000)});
+    const result=await(env.OPENAI_FETCH||fetch)('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:'Bearer '+env.OPENAI_API_KEY,'content-type':'application/json'},body:JSON.stringify({model:env.PAUL_ASSISTANT_MODEL||'gpt-5-mini',store:false,max_output_tokens:250,input:[{role:'developer',content:rules},{role:'user',content:prompt}]}),redirect:'manual',signal:AbortSignal.timeout(12000)});
     if(!result.ok)throw Error('paul_reply_failed');
     const data=await result.json();
     answer=typeof data.output_text==='string'?data.output_text:(data.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');

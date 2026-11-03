@@ -15,7 +15,7 @@ async function run(env,model,body,contentType,timeoutMs){
     method:'POST',
     headers:{authorization:'Bearer '+env.CLOUDFLARE_AI_TOKEN,'content-type':contentType},
     body,
-    redirect:'error',
+    redirect:'manual',
     signal:AbortSignal.timeout(timeoutMs),
   });
   if(!res.ok)throw Error('cloudflare_ai_request_failed_'+res.status);

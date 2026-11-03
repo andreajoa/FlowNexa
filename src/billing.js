@@ -19,7 +19,7 @@ function config(env){
 async function stripe(env,path,{method='GET',params={},idempotencyKey}={}){
  const headers={authorization:`Bearer ${env.STRIPE_SECRET_KEY}`,'Stripe-Version':API_VERSION};
  if(idempotencyKey)headers['Idempotency-Key']=idempotencyKey;
- const options={method,headers,redirect:'error',signal:AbortSignal.timeout(12000)};
+ const options={method,headers,redirect:'manual',signal:AbortSignal.timeout(12000)};
  if(method==='POST'){headers['content-type']='application/x-www-form-urlencoded';options.body=new URLSearchParams(params).toString();}
  let response,data;try{response=await(env.STRIPE_FETCH||fetch)('https://api.stripe.com/v1/'+path,options);data=await response.json();}catch{throw error('billing_provider_unavailable');}
  if(!response.ok)throw error('billing_provider_unavailable');

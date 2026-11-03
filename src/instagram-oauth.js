@@ -59,7 +59,7 @@ const del=await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash=? AND 
 if(url.searchParams.has("error")||!code)return J({error:"authorization_declined"},400);
 step='code_exchange';
 const form=new URLSearchParams({client_id:env.META_APP_ID,client_secret:env.META_APP_SECRET,grant_type:"authorization_code",redirect_uri:redirect,code});
-const exchange=await (env.META_FETCH||fetch)("https://api.instagram.com/oauth/access_token",{method:"POST",body:form,redirect:"error",signal:AbortSignal.timeout(10000)});
+const exchange=await (env.META_FETCH||fetch)("https://api.instagram.com/oauth/access_token",{method:"POST",body:form,redirect:"manual",signal:AbortSignal.timeout(10000)});
 const shortPayload=await exchange.json().catch(()=>({}));
 const short=validToken(shortPayload?.access_token)&&!shortPayload.data?shortPayload:!shortPayload?.access_token&&Array.isArray(shortPayload?.data)&&shortPayload.data.length===1?shortPayload.data[0]:null;
 if(!exchange.ok||!validToken(short?.access_token))return failed('token_exchange_failed',exchange,shortPayload);
@@ -70,7 +70,7 @@ if(short.permissions!==undefined&&(!permissions||permissions.some(scope=>typeof 
 step='long_token_exchange';
 const longer=new URL("https://graph.instagram.com/access_token");
 longer.search=new URLSearchParams({grant_type:"ig_exchange_token",client_secret:env.META_APP_SECRET,access_token:short.access_token}).toString();
-const long=await (env.META_FETCH||fetch)(longer,{method:"GET",redirect:"error",signal:AbortSignal.timeout(10000)});
+const long=await (env.META_FETCH||fetch)(longer,{method:"GET",redirect:"manual",signal:AbortSignal.timeout(10000)});
 const tokenData=(await long.json().catch(()=>null))||{};
 if(!long.ok||!validToken(tokenData.access_token)||!Number.isSafeInteger(tokenData.expires_in)||tokenData.expires_in<=86400||tokenData.expires_in>90*86400)return failed('long_token_exchange_failed',long,tokenData);
 const activeToken=tokenData.access_token,lifetime=tokenData.expires_in;
@@ -79,7 +79,7 @@ const activeToken=tokenData.access_token,lifetime=tokenData.expires_in;
 step='profile';
 const profileUrl=new URL(`https://graph.instagram.com/${version}/me`);
 profileUrl.search=new URLSearchParams({fields:"user_id,username"}).toString();
-const response=await (env.META_FETCH||fetch)(profileUrl,{method:"GET",headers:{authorization:"Bearer "+activeToken},redirect:"error",signal:AbortSignal.timeout(10000)});
+const response=await (env.META_FETCH||fetch)(profileUrl,{method:"GET",headers:{authorization:"Bearer "+activeToken},redirect:"manual",signal:AbortSignal.timeout(10000)});
 const profile=(await response.json().catch(()=>null))||{};
 if(!response.ok||typeof profile.username!=="string"||!profile.username||!/^\d{1,50}$/.test(String(profile.user_id||"")))return failed('instagram_profile_failed',response,profile);
 const id=crypto.randomUUID();const encrypted=await encryptToken(activeToken,env.TOKEN_ENCRYPTION_KEY);
@@ -89,7 +89,7 @@ if(existing&&existing.workspace_id!==stateRow.workspace_id)return J({error:"inst
 const expire=Math.floor(Date.now()/1000)+lifetime;
 step='subscription';
 const subscriptionUrl=`https://graph.instagram.com/${version}/me/subscribed_apps`;
-const subscribed=await (env.META_FETCH||fetch)(subscriptionUrl,{method:'POST',headers:{authorization:'Bearer '+activeToken,'content-type':'application/json'},body:JSON.stringify({subscribed_fields:'comments,messages,messaging_postbacks'}),redirect:'error',signal:AbortSignal.timeout(10000)});
+const subscribed=await (env.META_FETCH||fetch)(subscriptionUrl,{method:'POST',headers:{authorization:'Bearer '+activeToken,'content-type':'application/json'},body:JSON.stringify({subscribed_fields:'comments,messages,messaging_postbacks'}),redirect:'manual',signal:AbortSignal.timeout(10000)});
 // The authenticated POST success is Meta's documented account-subscription confirmation.
 // GET subscription record IDs are a different namespace, not OAuth/parent app IDs.
 const subscriptionResult=await subscribed.json().catch(()=>({}));if(!subscriptionConfirmed(subscribed,subscriptionResult))return failed('instagram_subscription_failed',subscribed,subscriptionResult);

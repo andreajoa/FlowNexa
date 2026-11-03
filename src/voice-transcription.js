@@ -12,7 +12,7 @@ function mediaURL(raw){
   return url;
 }
 async function downloadAudio(url,env){
-  const resp=await(env.VOICE_MEDIA_FETCH||fetch)(url,{redirect:'error',signal:AbortSignal.timeout(10000)});
+  const resp=await(env.VOICE_MEDIA_FETCH||fetch)(url,{redirect:'manual',signal:AbortSignal.timeout(10000)});
   if(!resp.ok||Number(resp.headers.get('content-length'))>LIMIT)throw Error('audio_download_failed');
   const reader=resp.body?.getReader();if(!reader)throw Error('audio_invalid');
   let count=0;const chunks=[];
@@ -32,7 +32,7 @@ export async function transcribeIncomingVoice(event,env){
     const type=event.audio_mime_type||mime||'application/octet-stream';
     const ext=type.includes('webm')?'webm':type.includes('wav')?'wav':type.includes('mpeg')?'mp3':type.includes('mp4')?'m4a':'ogg';
     const form=new FormData();form.set('model','gpt-transcribe');form.set('file',new Blob([bytes],{type}), 'voice-note.'+ext);
-    const result=await(env.OPENAI_FETCH||fetch)('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{authorization:'Bearer '+env.OPENAI_API_KEY},body:form,redirect:'error',signal:AbortSignal.timeout(16000)});
+    const result=await(env.OPENAI_FETCH||fetch)('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{authorization:'Bearer '+env.OPENAI_API_KEY},body:form,redirect:'manual',signal:AbortSignal.timeout(16000)});
     if(!result.ok)throw Error('transcription_failed');
     text=(await result.json().catch(()=>null))?.text;
   }else{

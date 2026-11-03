@@ -22,7 +22,7 @@ export async function refreshAccounts(env){
    let token;try{token=await decryptToken(account.encrypted_token,env.TOKEN_ENCRYPTION_KEY);}catch{if(await requireReconnect(env,account))summary.reconnect_required++;else summary.skipped++;continue;}
    const url=new URL('https://graph.instagram.com/refresh_access_token');
    url.search=new URLSearchParams({grant_type:'ig_refresh_token',access_token:token}).toString();
-   const response=await(env.META_FETCH||fetch)(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000)});
+   const response=await(env.META_FETCH||fetch)(url,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000)});
    const data=await response.json();
    if(Number(data.error?.code)===190){if(await requireReconnect(env,account))summary.reconnect_required++;else summary.skipped++;continue;}
    // Reject malformed lifetimes instead of making an invalid account appear healthy.

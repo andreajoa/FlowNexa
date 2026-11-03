@@ -56,7 +56,7 @@ const app={async fetch(request,env,ctx={}){
   if(enabled){
    try{
     const result=await fetch('https://api.cloudflare.com/client/v4/accounts/'+env.CLOUDFLARE_AI_ACCOUNT_ID+'/tokens/verify',{
-      headers:{authorization:'Bearer '+env.CLOUDFLARE_AI_TOKEN},redirect:'error',signal:AbortSignal.timeout(6000),
+      headers:{authorization:'Bearer '+env.CLOUDFLARE_AI_TOKEN},redirect:'manual',signal:AbortSignal.timeout(6000),
     });
     const data=await result.json().catch(()=>null);
     credential=result.ok&&data?.success===true&&data.result?.status==='active'?'valid':'invalid';
