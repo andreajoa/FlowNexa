@@ -29,3 +29,12 @@ test('a website lead and the same person on Instagram become one contact; the fo
  // Another workspace never sees it.
  assert.equal((await otherChannelHistory(env,'ws2','hashX')).events.length,0);
 });
+test('an e-mail written in the Direct links the person to their website form contact',async()=>{
+ const {linkByEmailInText}=await import('../src/contacts.js');
+ const db=identityDatabase(),env={DB:db,TOKEN_ENCRYPTION_KEY:KEY};
+ await recordLead(env,'ws1',{name:'Ana',email:'ana@example.com',message:'Quero orientação para meu filho.'});
+ assert.equal((await otherChannelHistory(env,'ws1','hashA')).events.length,0);
+ assert.equal(await linkByEmailInText(env,'ws1','hashA','oi, usei o e-mail Ana@Example.com no site'),true);
+ const o=await otherChannelHistory(env,'ws1','hashA');assert.equal(o.profile.name,'Ana');assert.match(o.events[0].text,/orientação/);
+ assert.equal(await linkByEmailInText(env,'ws1','hashA','sem email aqui'),false);
+});

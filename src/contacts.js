@@ -3,9 +3,9 @@
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 import {metaRequest} from './meta-client.js';
 
-let ready=false;
+const ready=new WeakSet();
 async function ensure(env){
- if(ready)return;
+ if(ready.has(env.DB))return;
  await env.DB.batch([
   env.DB.prepare('CREATE TABLE IF NOT EXISTS contacts (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, encrypted_profile TEXT NOT NULL, email_hash TEXT, phone_hash TEXT, instagram_username TEXT, instagram_recipient_hash TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)'),
   env.DB.prepare('CREATE INDEX IF NOT EXISTS contacts_ws_email ON contacts(workspace_id,email_hash)'),
@@ -14,7 +14,7 @@ async function ensure(env){
   env.DB.prepare('CREATE TABLE IF NOT EXISTS contact_events (id TEXT PRIMARY KEY, contact_id TEXT NOT NULL, channel TEXT NOT NULL, encrypted_text TEXT NOT NULL, at INTEGER NOT NULL)'),
   env.DB.prepare('CREATE INDEX IF NOT EXISTS contact_events_contact ON contact_events(contact_id,at)')
  ]);
- ready=true;
+ ready.add(env.DB);
 }
 const sha=async v=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))),b=>b.toString(16).padStart(2,'0')).join('');
 export const normalizeInstagram=v=>{const m=/^(?:https?:\/\/(?:www\.)?instagram\.com\/)?@?([A-Za-z0-9._]{1,30})\/?$/.exec(String(v||'').trim());return m?m[1].toLowerCase():null;};
@@ -45,14 +45,15 @@ export async function contactForInstagram(env,account,senderId,recipientHash){
   await ensure(env);
   let row=await env.DB.prepare('SELECT * FROM contacts WHERE workspace_id=? AND instagram_recipient_hash=? LIMIT 1').bind(account.workspace_id,recipientHash).first();
   if(row)return row;
+  // Only ask Instagram who this is when a website contact is still waiting to be linked by its @ (one call, then cached).
+  const waiting=await env.DB.prepare('SELECT 1 AS x FROM contacts WHERE workspace_id=? AND instagram_username IS NOT NULL AND instagram_recipient_hash IS NULL LIMIT 1').bind(account.workspace_id).first();
+  if(!waiting)return null;
   const profile=await metaRequest(env,account,`${encodeURIComponent(senderId)}?fields=username,name`);
   const username=normalizeInstagram(profile?.username);
   if(!username)return null;
   row=await env.DB.prepare('SELECT * FROM contacts WHERE workspace_id=? AND instagram_username=? LIMIT 1').bind(account.workspace_id,username).first();
   if(row){await env.DB.prepare('UPDATE contacts SET instagram_recipient_hash=?,updated_at=? WHERE id=?').bind(recipientHash,Date.now(),row.id).run();return {...row,instagram_recipient_hash:recipientHash};}
-  const now=Date.now(),id=crypto.randomUUID();
-  await env.DB.prepare('INSERT INTO contacts(id,workspace_id,encrypted_profile,instagram_username,instagram_recipient_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(id,account.workspace_id,await encryptToken(JSON.stringify({name:clean(profile?.name,100),source:'instagram'}),env.TOKEN_ENCRYPTION_KEY),username,recipientHash,now,now).run();
-  return {id,workspace_id:account.workspace_id,instagram_username:username,instagram_recipient_hash:recipientHash};
+  return null;
  }catch{return null;}
 }
 
@@ -67,4 +68,18 @@ export async function otherChannelHistory(env,workspaceId,recipientHash){
   const out=[];for(const e of events.reverse())out.push({role:'user',text:'('+(e.channel==='site'?'formulário do site':e.channel)+') '+await decryptToken(e.encrypted_text,env.TOKEN_ENCRYPTION_KEY),at:e.at});
   return {events:out,profile,contactId:row.id};
  }catch{return {events:[],profile:null};}
+}
+
+/** A person who writes their e-mail in the Direct is linked to the contact that used it on the website form. */
+export async function linkByEmailInText(env,workspaceId,recipientHash,text){
+ try{
+  const m=/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.exec(String(text||''));if(!m)return false;
+  await ensure(env);
+  const row=await env.DB.prepare('SELECT id,instagram_recipient_hash FROM contacts WHERE workspace_id=? AND email_hash=? LIMIT 1').bind(workspaceId,await sha('email:'+m[0].toLowerCase())).first();
+  if(!row||row.instagram_recipient_hash===recipientHash)return false;
+  // Another Instagram record of the same person (created when they first wrote) is merged into the form contact.
+  await env.DB.prepare('UPDATE contacts SET instagram_recipient_hash=NULL WHERE workspace_id=? AND instagram_recipient_hash=? AND id<>?').bind(workspaceId,recipientHash,row.id).run();
+  await env.DB.prepare('UPDATE contacts SET instagram_recipient_hash=?,updated_at=? WHERE id=?').bind(recipientHash,Date.now(),row.id).run();
+  return true;
+ }catch{return false;}
 }

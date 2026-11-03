@@ -1,4 +1,4 @@
-import {contactForInstagram,otherChannelHistory} from './contacts.js';
+import {contactForInstagram,otherChannelHistory,linkByEmailInText} from './contacts.js';
 import {loadMemory,remember,transcript} from './contact-memory.js';
 import {accountUsable} from './zernio-client.js';
 import {campaignSuppressed} from './campaign-opt-out.js';
@@ -49,7 +49,7 @@ async function drive(env,row,state,deadline){
    // A reply may already be durable while recovering an accepted message's cursor write.
    // Select its original encrypted event, not a later message that merely refreshed the window.
    const pending=await env.DB.prepare('SELECT e.encrypted_event FROM conversation_inbound i JOIN automation_events e ON e.id=i.event_id WHERE i.conversation_id=? AND e.event_at>=? AND e.event_at>? AND e.event_at<=? ORDER BY i.received_at,i.rowid LIMIT 1').bind(row.id,state.waitingSince,state.waitingInboundAt,node.deadline_seconds_from_start===undefined?Number.MAX_SAFE_INTEGER:row.created_at+node.deadline_seconds_from_start*1000).first();
-   if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;state.replyPayload=reply.payload||null;await remember(env,row.account_id,row.recipient_hash,'user',reply.text||reply.payload||'');await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
+   if(pending){const reply=JSON.parse(await decryptToken(pending.encrypted_event,env.TOKEN_ENCRYPTION_KEY));state.replyText=reply.text;state.replyPayload=reply.payload||null;await remember(env,row.account_id,row.recipient_hash,'user',reply.text||reply.payload||'');await linkByEmailInText(env,row.workspace_id,row.recipient_hash,reply.text);await save(env,row,state,{node_id:node.on_reply,step_index:row.step_index+1});continue;}
    const dueAt=Math.min(state.waitingSince+node.timeout_seconds*1000,node.deadline_seconds_from_start===undefined?Infinity:row.created_at+node.deadline_seconds_from_start*1000);
    await save(env,row,state,{status:'waiting_reply',due_at:dueAt});return;
   }

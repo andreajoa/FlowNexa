@@ -3,11 +3,11 @@
 import {encryptToken,decryptToken} from './instagram-oauth.js';
 
 const MAX_TURNS=24,MAX_TEXT=600;
-let ready=false;
+const ready=new WeakSet();
 async function ensure(env){
- if(ready)return;
+ if(ready.has(env.DB))return;
  await env.DB.prepare('CREATE TABLE IF NOT EXISTS contact_memory (account_id TEXT NOT NULL, recipient_hash TEXT NOT NULL, encrypted_history TEXT NOT NULL, turns INTEGER NOT NULL DEFAULT 0, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY(account_id,recipient_hash))').run();
- ready=true;
+ ready.add(env.DB);
 }
 export async function loadMemory(env,accountId,recipientHash){
  if(!env.DB||!env.TOKEN_ENCRYPTION_KEY||!recipientHash)return [];
