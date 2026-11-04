@@ -3,3 +3,7 @@ node_modules/
 .wrangler/
 .env*
 !.env.example
+
+# Local Cloudflare configurations with account-specific identifiers
+wrangler.staging.toml
+wrangler.production.toml

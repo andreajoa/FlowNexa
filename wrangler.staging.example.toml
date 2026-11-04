@@ -1,0 +1,15 @@
+name = "flownexa-migration-staging"
+main = "src/cloudflare-entry.js"
+compatibility_date = "2026-10-09"
+workers_dev = true
+
+[vars]
+APP_MODE = "development"
+MESSAGING_ENABLED = "false"
+PUBLIC_SIGNUP_ENABLED = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flownexa-migration-staging"
+database_id = "REPLACE_WITH_STAGING_D1_DATABASE_ID"
+migrations_dir = "migrations"
