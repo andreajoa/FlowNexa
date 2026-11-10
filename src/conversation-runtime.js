@@ -114,7 +114,7 @@ async function drive(env,row,state,deadline){
   }catch(error){
    if(error.deferred){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='processing_deferred' WHERE id=?").bind(jobId).run();await save(env,row,state,{due_at:Date.now()+2000});return;}
    if(error.retryable&&row.retry_count<5){await env.DB.prepare("UPDATE automation_jobs SET status='pending',error='meta_rate_limited' WHERE id=?").bind(jobId).run();await save(env,row,state,{retry_count:row.retry_count+1,due_at:Date.now()+Math.min(3600000,30000*2**row.retry_count)});return;}
-   const uncertain=error.message==='delivery_unknown',reason=error.message==='billing_message_limit'?'billing_message_limit':'message_rejected';
+   const uncertain=error.message==='delivery_unknown',known=['billing_message_limit','messaging_disabled','account_reconnect_required','private_reply_window_expired','message_window_expired','event_time_invalid','invalid_comment','invalid_recipient','unsupported_action','meta_request_rejected','meta_invalid_response'],reason=known.includes(error.message)?error.message:'message_rejected';
    await env.DB.prepare('UPDATE automation_jobs SET status=?,error=?,completed_at=? WHERE id=?').bind(uncertain?'unknown':'failed',uncertain?'delivery_unknown':reason,Date.now(),jobId).run();
    if(error.message==='account_reconnect_required')await env.DB.prepare("UPDATE instagram_accounts SET status='reconnect_required' WHERE id=?").bind(row.account_id).run();
    await save(env,row,state,{status:uncertain?'unknown':'failed',error:uncertain?'delivery_unknown':reason});return;
