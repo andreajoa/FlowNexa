@@ -343,7 +343,7 @@ export const LANDING_EN = {
   "Como conheço os planos e valores?": "Where can I see plans and pricing?",
   "Consulte os valores mensais e anuais na seção de planos. A moeda acompanha o idioma da página: reais em português brasileiro e dólares em inglês.": "See monthly and annual prices in the plans section. On this English page prices are shown in US dollars.",
   "Conecte conversas, simplifique processos e crie experiências melhores no Instagram.": "Connect with your people, cut the busywork and make Instagram work harder for you.",
-  "Plataforma em desenvolvimento · Recursos sujeitos à disponibilidade": "Platform in development · Features subject to availability",
+  "Plataforma em desenvolvimento · Recursos sujeitos à disponibilidade": "Meta’s official API · No password sharing",
   "Plataforma": "Platform",
   "Recursos": "Features",
   "Para quem é": "Who it's for",
