@@ -6,6 +6,31 @@ const copy={
  es:{verify:['Confirma tu correo de FlowNexa','Confirma tu dirección de correo para acceder a tu espacio de trabajo.','Confirmar correo'],reset:['Restablece tu contraseña de FlowNexa','Recibimos una solicitud para restablecer tu contraseña.','Restablecer contraseña'],expiry:'Este enlace caduca pronto y solo puede utilizarse una vez. Si no lo solicitaste, ignora este mensaje.'},
  it:{verify:['Conferma la tua email FlowNexa','Conferma il tuo indirizzo email per accedere al tuo spazio di lavoro.','Conferma email'],reset:['Reimposta la password FlowNexa','Abbiamo ricevuto una richiesta di reimpostazione della password.','Reimposta password'],expiry:'Questo link scade a breve e può essere utilizzato una sola volta. Se non hai fatto questa richiesta, ignora questo messaggio.'}
 };
+// Transbordo (pedido do André, 27/11/2026): Resend primeiro; quando o Resend bate o limite do
+// plano → Brevo (BREVO_API_KEY); quando o Brevo bate → NovaMail (NOVAMAIL_API_KEY, domínio
+// mail.flownex.online). Outros erros continuam como antes. Nada é desligado.
+const isLimit=(status,text)=>status===429||/quota|limit|exceeded|too many|credits?/i.test(String(text||''));
+const novamailFrom=(env,from)=>env.NOVAMAIL_FROM||String(from).replace(/@(?:[a-z0-9-]+\.)*flownex\.online/i,'@mail.flownex.online');
+const brevoAddress=v=>{const m=String(v).match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);return m?{name:m[1].trim()||undefined,email:m[2].trim()}:{email:String(v).trim()};};
+export async function deliverEmail(env,payload,idempotencyKey,options={}){
+ const doFetch=env.RESEND_FETCH||fetch;
+ const response=await doFetch('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json','idempotency-key':idempotencyKey},body:JSON.stringify(payload),...options});
+ const result=await response.json().catch(()=>({}));
+ if(response.ok&&typeof result.id==='string'&&result.id)return result.id;
+ if(!isLimit(response.status,`${result.name||''} ${result.message||''}`))throw Error('email_delivery_unavailable');
+ if(env.BREVO_API_KEY){
+  const r=await doFetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':env.BREVO_API_KEY,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({sender:brevoAddress(payload.from),to:payload.to.map(email=>({email})),replyTo:payload.reply_to?brevoAddress(payload.reply_to):undefined,subject:payload.subject,htmlContent:payload.html,textContent:payload.text})});
+  const j=await r.json().catch(()=>({}));
+  if(r.ok&&j.messageId)return `brevo:${j.messageId}`;
+  if(!isLimit(r.status,`${j.code||''} ${j.message||''}`))throw Error('email_delivery_unavailable');
+ }
+ if(env.NOVAMAIL_API_KEY){
+  const r=await doFetch(`${(env.NOVAMAIL_API_URL||'https://api.novamail.nexaclouds.online').replace(/\/$/,'')}/emails`,{method:'POST',headers:{authorization:`Bearer ${env.NOVAMAIL_API_KEY}`,'content-type':'application/json','idempotency-key':idempotencyKey},body:JSON.stringify({...payload,from:novamailFrom(env,payload.from),reply_to:payload.reply_to?[payload.reply_to]:undefined})});
+  const j=await r.json().catch(()=>({}));
+  if(r.ok&&typeof j.id==='string'&&j.id)return `nm:${j.id}`;
+ }
+ throw Error('email_delivery_unavailable');
+}
 const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 export function identityEmail({purpose,token,locale='en'},env){
  const language=copy[locale]?locale:'en',c=copy[language],parts=c[purpose==='verify_email'?'verify':'reset'];
@@ -20,10 +45,7 @@ export async function sendIdentityEmail(env,{email,purpose,token,tokenHash,local
  if(!env.RESEND_API_KEY)throw Error('email_configuration_missing');
  const message=identityEmail({purpose,token,locale},env);
  try {
- const response=await(env.RESEND_FETCH||fetch)('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json','idempotency-key':`flownexa-${purpose}-${tokenHash}`},body:JSON.stringify({from:env.RESEND_FROM||'FlowNexa <hello@flownex.online>',reply_to:env.RESEND_REPLY_TO||'flownex@proton.me',to:[email],...message}),signal:AbortSignal.timeout(12000)});
- const result=await response.json();
- if(!response.ok||typeof result.id!=='string'||!result.id)throw Error('email_delivery_unavailable');
- return result.id;
+ return await deliverEmail(env,{from:env.RESEND_FROM||'FlowNexa <hello@flownex.online>',reply_to:env.RESEND_REPLY_TO||'flownex@proton.me',to:[email],...message},`flownexa-${purpose}-${tokenHash}`,{signal:AbortSignal.timeout(12000)});
  } catch {throw Error('email_delivery_unavailable');}
 }
 
@@ -45,8 +67,5 @@ export function trialReminderEmail({trialEnd,plan,locale='pt-BR'},env){
 export async function sendTrialReminder(env,{email,trialEnd,plan,locale,eventId}){
  if(!env.RESEND_API_KEY)throw Error('email_configuration_missing');
  const message=trialReminderEmail({trialEnd,plan,locale},env);
- const response=await(env.RESEND_FETCH||fetch)('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json','idempotency-key':`flownexa-trial-${eventId}`},body:JSON.stringify({from:env.RESEND_FROM||'FlowNexa <hello@flownex.online>',to:[email],subject:message.subject,html:message.html,text:message.text})});
- const result=await response.json();
- if(!response.ok||typeof result.id!=='string')throw Error('email_delivery_unavailable');
- return result.id;
+ return deliverEmail(env,{from:env.RESEND_FROM||'FlowNexa <hello@flownex.online>',to:[email],subject:message.subject,html:message.html,text:message.text},`flownexa-trial-${eventId}`);
 }
